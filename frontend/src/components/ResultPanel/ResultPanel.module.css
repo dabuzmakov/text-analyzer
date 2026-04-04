@@ -1,0 +1,183 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.heading {
+  margin: 0;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.74rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.state {
+  min-height: 280px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.state h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.state p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.errorState {
+  border-color: #edd2cb;
+  background: #fff7f5;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.summaryCard span {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.summaryCard strong {
+  font-size: 1.55rem;
+  font-weight: 600;
+}
+
+.applied {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.applied span {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.tableWrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+
+.table thead {
+  background: var(--surface-soft);
+}
+
+.table th,
+.table td {
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.table tbody tr {
+  border-top: 1px solid var(--border);
+}
+
+.table tbody tr:hover {
+  background: #faf7f2;
+}
+
+.loader {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(16, 24, 40, 0.12);
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lightButton,
+.darkButton {
+  border-radius: var(--radius-md);
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: border-color 180ms ease, opacity 180ms ease;
+}
+
+.lightButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.darkButton {
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: #fff;
+}
+
+.lightButton:hover:not(:disabled),
+.darkButton:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.lightButton:disabled,
+.darkButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
