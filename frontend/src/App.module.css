@@ -1,0 +1,23 @@
+.app {
+  min-height: 100vh;
+}
+
+.workspace {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: var(--workspace-padding);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100vh - 116px);
+}
