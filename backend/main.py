@@ -7,9 +7,21 @@ from typing import List, Optional, Literal
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 # Инициализация приложения
 app = FastAPI(title="Text Frequency Analysis API")
+
+origins = [
+    "https://text-analyzer-frontend-ra8y.onrender.com",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Директории для хранения данных
 CORPUS_DIR = "corpus_data"
