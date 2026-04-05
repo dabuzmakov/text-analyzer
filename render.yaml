@@ -19,7 +19,7 @@ services:
     autoDeployTrigger: checksPass
     envVars:
       - key: VITE_USE_MOCK_API
-        value: false
+        value: "false"
       - key: VITE_API_BASE_URL
         sync: false
     routes:
