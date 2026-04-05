@@ -1,5 +1,16 @@
 services:
   - type: web
+    name: text-analyzer-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeployTrigger: checksPass
+    healthCheckPath: /docs
+    envVars:
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
+  - type: web
     name: text-analyzer-frontend
     runtime: static
     rootDir: frontend
