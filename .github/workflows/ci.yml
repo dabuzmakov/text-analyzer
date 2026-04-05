@@ -60,3 +60,6 @@ jobs:
 
       - name: Compile backend entrypoint
         run: python -m compileall main.py
+
+      - name: Import ASGI app
+        run: python -c "from main import app; assert app.title == 'Text Frequency Analysis API'"
