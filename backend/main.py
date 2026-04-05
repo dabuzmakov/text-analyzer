@@ -82,7 +82,7 @@ def extract_words_from_text(text: str, min_length: int) -> List[str]:
 # Маршруты (Endpoints)
 # ==========================================
 
-@app.put("/api/corpus")
+@app.put("/corpus")
 async def update_corpus(request_data: PutCorpusRequest):
     """
     Принимает JSON с документами, очищает старые данные и сохраняет новые тексты.
@@ -111,7 +111,7 @@ async def update_corpus(request_data: PutCorpusRequest):
     }
 
 
-@app.post("/api/analysis/run")
+@app.post("/analysis/run")
 async def analyze_corpus(request_data: PostAnalysisRequest):
     """
     Анализирует сохраненные тексты, формирует общую статистику и генерирует CSV для каждого файла.
@@ -160,7 +160,7 @@ async def analyze_corpus(request_data: PostAnalysisRequest):
             writer.writerows(local_most_common)
 
         # Сохраняем ссылку для фронтенда
-        csv_download_urls.append(f"/api/export/csv/{csv_filename}")
+        csv_download_urls.append(f"/export/csv/{csv_filename}")
 
     # Если файлов не было
     if documents_count == 0:
@@ -195,7 +195,7 @@ async def analyze_corpus(request_data: PostAnalysisRequest):
     }
 
 
-@app.get("/api/export/csv/{filename}")
+@app.get("/export/csv/{filename}")
 async def download_csv(filename: str):
     """
     Отдает сгенерированный CSV файл по запросу фронтенда.
