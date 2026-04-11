@@ -1,74 +1,49 @@
 import { APP_MESSAGES } from '../constants/messages'
-import type { AnalysisOrder, AnalysisResult } from '../types'
+import type {
+  AnalysisResponse,
+  FrequencyRow,
+  RunAnalysisRequest,
+  SaveCorpusRequest,
+  SaveCorpusResponse,
+} from '../types'
 
 const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true'
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+).replace(/\/+$/, '')
+const MOCK_DELAY = 1000
 
-type SaveCorpusPayload = {
-  browser_id: string
-  documents: Array<{
-    title: string
-    content: string
-  }>
-}
-
-type RunAnalysisPayload = {
-  browser_id: string
-  params: {
-    top_n: number
-    min_word_length: number
-    order_by: AnalysisOrder
-  }
-}
-
-type ApiEnvelope<T> = {
+type ApiEnvelope<T> = T & {
   status: string
-  data: T
   message?: string
 }
 
-type SaveCorpusResponse = {
-  browser_id: string
-  documents_count: number
-  message: string
-}
+const MOCK_ANALYSIS_TABLE: FrequencyRow[] = [
+  { word: 'текст', count: 54 },
+  { word: 'данные', count: 43 },
+  { word: 'анализ', count: 38 },
+  { word: 'корпус', count: 29 },
+  { word: 'документ', count: 24 },
+]
 
-type AnalysisResponse = {
-  applied_filters: {
-    top_n: number
-    min_word_length: number
-    order_by: AnalysisOrder
-  }
-  summary: AnalysisResult['summary']
-  table: AnalysisResult['table']
-}
-
-const MOCK_DELAY = 1000
-
-const mockAnalysisResponse: AnalysisResponse = {
-  applied_filters: {
-    top_n: 20,
-    min_word_length: 3,
-    order_by: 'desc',
+const MOCK_ANALYSIS_RESPONSE: AnalysisResponse = {
+  status: 'success',
+  data: {
+    summary: {
+      documents_count: 3,
+      total_words: 4200,
+      unique_words: 830,
+    },
+    table: MOCK_ANALYSIS_TABLE,
   },
-  summary: {
-    documents_count: 3,
-    total_words_before_filters: 5200,
-    total_words_after_filters: 4200,
-    unique_words: 830,
-  },
-  table: [
-    { word: 'текст', count: 54 },
-    { word: 'данные', count: 43 },
-    { word: 'анализ', count: 38 },
-    { word: 'слово', count: 35 },
-    { word: 'корпус', count: 29 },
-    { word: 'частота', count: 26 },
-    { word: 'документ', count: 24 },
-    { word: 'результат', count: 21 },
-    { word: 'модель', count: 18 },
-    { word: 'пример', count: 16 },
-  ],
 }
+
+const MOCK_CORPUS_CSV = [
+  'word,count',
+  'текст,54',
+  'данные,43',
+  'анализ,38',
+].join('\n')
 
 function wait(delay: number) {
   return new Promise((resolve) => window.setTimeout(resolve, delay))
@@ -79,13 +54,54 @@ function getApiBaseUrl() {
     return ''
   }
 
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
-
-  if (!baseUrl) {
+  if (!API_BASE_URL) {
     throw new Error(APP_MESSAGES.missingApiBaseUrl)
   }
 
-  return baseUrl.replace(/\/+$/, '')
+  return API_BASE_URL
+}
+
+function createMockCsvContent(identifier: string) {
+  if (identifier === 'corpus') {
+    return MOCK_CORPUS_CSV
+  }
+
+  return ['word,count', `документ_${identifier},12`, 'пример,7'].join('\n')
+}
+
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = fileName
+  link.style.display = 'none'
+  document.body.append(link)
+  link.click()
+  link.remove()
+
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(url)
+  }, 0)
+}
+
+function getFileNameFromDisposition(
+  identifier: string,
+  preferredFileName: string | undefined,
+  contentDisposition: string | null,
+) {
+  if (preferredFileName) {
+    return preferredFileName
+  }
+
+  const match = contentDisposition?.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
+  const rawFileName = match?.[1]
+
+  if (rawFileName) {
+    return decodeURIComponent(rawFileName.replace(/"/g, ''))
+  }
+
+  return identifier === 'corpus' ? 'statistics.csv' : `document-${identifier}.csv`
 }
 
 async function request<T>(
@@ -117,17 +133,16 @@ async function request<T>(
     throw new Error(parsed?.message || APP_MESSAGES.invalidServerResponse)
   }
 
-  return parsed.data
+  return parsed
 }
 
-export function saveCorpus(payload: SaveCorpusPayload) {
+export function saveCorpus(payload: SaveCorpusRequest) {
   if (USE_MOCK_API) {
     return wait(MOCK_DELAY).then(
       () =>
         ({
-          browser_id: payload.browser_id,
-          documents_count: payload.documents.length,
-          message: 'Corpus saved and tokenized',
+          status: 'success',
+          message: `Saved ${payload.documents.length} documents`,
         }) satisfies SaveCorpusResponse,
     )
   }
@@ -135,17 +150,46 @@ export function saveCorpus(payload: SaveCorpusPayload) {
   return request<SaveCorpusResponse>('/corpus', 'PUT', payload)
 }
 
-export function runAnalysis(payload: RunAnalysisPayload) {
+export function runAnalysis(payload: RunAnalysisRequest) {
   if (USE_MOCK_API) {
-    return wait(MOCK_DELAY).then(() => ({
-      ...mockAnalysisResponse,
-      applied_filters: {
-        top_n: payload.params.top_n,
-        min_word_length: payload.params.min_word_length,
-        order_by: payload.params.order_by,
-      },
-    }))
+    return wait(MOCK_DELAY).then(() => MOCK_ANALYSIS_RESPONSE)
   }
 
   return request<AnalysisResponse>('/analysis/run', 'POST', payload)
+}
+
+export async function downloadCsv(identifier: string, preferredFileName?: string) {
+  if (USE_MOCK_API) {
+    await wait(300)
+
+    const content = createMockCsvContent(identifier)
+    const blob = new Blob([content], {
+      type: 'text/csv;charset=utf-8',
+    })
+
+    triggerBlobDownload(
+      blob,
+      preferredFileName ||
+        (identifier === 'corpus' ? 'statistics.csv' : `document-${identifier}.csv`),
+    )
+
+    return
+  }
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/export/csv/${encodeURIComponent(identifier)}`,
+  )
+
+  if (!response.ok) {
+    throw new Error(APP_MESSAGES.downloadCsvError)
+  }
+
+  const blob = await response.blob()
+  const fileName = getFileNameFromDisposition(
+    identifier,
+    preferredFileName,
+    response.headers.get('content-disposition'),
+  )
+
+  triggerBlobDownload(blob, fileName)
 }

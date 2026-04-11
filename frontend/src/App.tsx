@@ -6,15 +6,15 @@ import { ManualDocumentModal } from './components/ManualDocumentModal'
 import { ResultPanel } from './components/ResultPanel'
 import { Toast } from './components/Toast'
 import appStyles from './App.module.css'
-import { runAnalysis, saveCorpus } from './shared/api/client'
 import { APP_MESSAGES } from './shared/constants/messages'
+import { useAnalyzerActions } from './shared/hooks/useAnalyzerActions'
 import type {
   AnalysisParams,
-  AnalysisResult,
-  DocumentItem,
   ManualForm,
 } from './shared/types'
+import type { UiDocument } from './shared/types'
 import { getOrCreateBrowserId } from './shared/utils/browser'
+import { createUiDocument } from './shared/utils/documents'
 import { readTextFile } from './shared/utils/files'
 
 const MAX_DOCUMENTS = 30
@@ -54,57 +54,37 @@ function loadStoredParams() {
   }
 }
 
-function createDocumentId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
-}
-
-function createDocument(title: string, content: string): DocumentItem {
-  return {
-    id: createDocumentId(),
-    title,
-    content,
-  }
-}
-
-function normalizeNumberInput(value: string, fallback: number) {
-  const trimmedValue = value.trim()
-
-  if (!trimmedValue) {
-    return fallback
-  }
-
-  const parsedValue = Number(trimmedValue)
-
-  if (Number.isNaN(parsedValue) || parsedValue < 1) {
-    return fallback
-  }
-
-  return Math.floor(parsedValue)
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return APP_MESSAGES.unexpectedError
-}
-
 export default function App() {
   const [browserId] = useState(getOrCreateBrowserId)
-  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [documents, setDocuments] = useState<UiDocument[]>([])
   const [analysisParams, setAnalysisParams] = useState(loadStoredParams)
   const [manualForm, setManualForm] = useState(emptyManualForm)
   const [isManualModalOpen, setIsManualModalOpen] = useState(false)
-  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null)
-  const [analysisError, setAnalysisError] = useState('')
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [isCorpusSaved, setIsCorpusSaved] = useState(false)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [editingDocumentId, setEditingDocumentId] = useState<number | null>(null)
+  const [nextDocumentId, setNextDocumentId] = useState(1)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [isToastVisible, setIsToastVisible] = useState(false)
+
+  const {
+    analysisError,
+    analysisResult,
+    handleAnalyze,
+    handleExport,
+    handleSaveCorpus,
+    hasSuccessfulAnalysis,
+    hasUnsavedChanges,
+    isAnalyzing,
+    isCorpusSaved,
+    isSaving,
+    resetAnalysisState,
+  } = useAnalyzerActions({
+    analysisParams,
+    browserId,
+    documents,
+    onExportError: (message) => showToast(message, 'error'),
+    onSaveError: (message) => showToast(message, 'error'),
+    onSaveSuccess: (message) => showToast(message, 'success'),
+  })
 
   useEffect(() => {
     localStorage.setItem(ANALYSIS_PARAMS_STORAGE_KEY, JSON.stringify(analysisParams))
@@ -139,6 +119,12 @@ export default function App() {
     !hasUnsavedChanges &&
     !isSaving &&
     !isAnalyzing
+  const canExport =
+    hasSuccessfulAnalysis &&
+    analysisResult !== null &&
+    isCorpusSaved &&
+    !hasUnsavedChanges &&
+    documents.length > 0
 
   function showToast(message: string, type: ToastState['type']) {
     setToast({
@@ -148,16 +134,9 @@ export default function App() {
     })
   }
 
-  function markCorpusAsChanged() {
-    setIsCorpusSaved(false)
-    setHasUnsavedChanges(true)
-    setAnalysisError('')
-  }
-
-  function updateDocuments(nextDocuments: DocumentItem[]) {
+  function updateDocuments(nextDocuments: UiDocument[]) {
     setDocuments(nextDocuments)
-    setAnalysisResult(null)
-    markCorpusAsChanged()
+    resetAnalysisState()
   }
 
   function resetManualForm() {
@@ -197,27 +176,34 @@ export default function App() {
 
     const freeSlots = MAX_DOCUMENTS - documents.length
     const selectedFiles = files.slice(0, freeSlots)
+    const startingDocumentId = nextDocumentId
+
+    setNextDocumentId((current) => current + selectedFiles.length)
 
     try {
       const newDocuments = await Promise.all(
-        selectedFiles.map(async (file) => {
+        selectedFiles.map(async (file, index) => {
           const content = await readTextFile(file)
 
-          return createDocument(file.name.replace(/\.txt$/i, '') || file.name, content)
+          return createUiDocument(
+            startingDocumentId + index,
+            file.name.replace(/\.txt$/i, '') || file.name,
+            content,
+          )
         }),
       )
 
       updateDocuments([...documents, ...newDocuments])
     } catch (error) {
-      showToast(getErrorMessage(error), 'error')
+      showToast(APP_MESSAGES.unexpectedError, 'error')
     }
   }
 
-  function handleRemoveDocument(documentId: string) {
+  function handleRemoveDocument(documentId: number) {
     updateDocuments(documents.filter((document) => document.id !== documentId))
   }
 
-  function handleEditDocument(documentId: string) {
+  function handleEditDocument(documentId: number) {
     const documentToEdit = documents.find((document) => document.id === documentId)
 
     if (!documentToEdit) {
@@ -255,58 +241,12 @@ export default function App() {
         ),
       )
     } else {
-      updateDocuments([...documents, createDocument(title, content)])
+      const documentId = nextDocumentId
+      setNextDocumentId((current) => current + 1)
+      updateDocuments([...documents, createUiDocument(documentId, title, content)])
     }
 
     closeManualModal()
-  }
-
-  async function handleSaveCorpus() {
-    setIsSaving(true)
-    setAnalysisError('')
-
-    try {
-      await saveCorpus({
-        browser_id: browserId,
-        documents: documents.map((document) => ({
-          title: document.title,
-          content: document.content,
-        })),
-      })
-
-      setIsCorpusSaved(true)
-      setHasUnsavedChanges(false)
-      showToast(APP_MESSAGES.saveSuccess, 'success')
-    } catch (error) {
-      showToast(getErrorMessage(error), 'error')
-      setIsCorpusSaved(false)
-      setHasUnsavedChanges(true)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function handleAnalyze() {
-    setIsAnalyzing(true)
-    setAnalysisError('')
-
-    try {
-      const result = await runAnalysis({
-        browser_id: browserId,
-        params: {
-          top_n: normalizeNumberInput(analysisParams.topN, 20),
-          min_word_length: normalizeNumberInput(analysisParams.minWordLength, 3),
-          order_by: analysisParams.orderBy,
-        },
-      })
-
-      setAnalysisResult(result)
-    } catch (error) {
-      setAnalysisResult(null)
-      setAnalysisError(getErrorMessage(error))
-    } finally {
-      setIsAnalyzing(false)
-    }
   }
 
   return (
@@ -345,9 +285,12 @@ export default function App() {
                 analysisError={analysisError}
                 analysisResult={analysisResult}
                 canAnalyze={canAnalyze}
+                canExport={canExport}
+                documents={documents}
                 isAnalyzing={isAnalyzing}
                 isSaving={isSaving}
                 onAnalyze={handleAnalyze}
+                onExport={handleExport}
                 onSave={handleSaveCorpus}
                 saveDisabled={!canSave}
               />

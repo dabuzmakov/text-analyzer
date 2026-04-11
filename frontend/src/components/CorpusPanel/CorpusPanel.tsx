@@ -1,17 +1,17 @@
 import type { ChangeEvent, DragEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import type { DocumentItem } from '../../shared/types'
+import type { UiDocument } from '../../shared/types'
 import { DocumentCard } from './DocumentCard'
 import styles from './CorpusPanel.module.css'
 
 type CorpusPanelProps = {
-  documents: DocumentItem[]
+  documents: UiDocument[]
   maxDocuments: number
   canUpload: boolean
   onFilesAdded: (files: File[]) => void
   onAddManual: () => void
-  onEditDocument: (documentId: string) => void
-  onRemoveDocument: (documentId: string) => void
+  onEditDocument: (documentId: number) => void
+  onRemoveDocument: (documentId: number) => void
 }
 
 export function CorpusPanel({
