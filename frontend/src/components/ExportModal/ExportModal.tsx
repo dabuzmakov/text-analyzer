@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UiDocument } from '../../shared/types'
 import sharedButtonStyles from '../../shared/styles/buttonStyles.module.css'
 import { getDocumentDisplayName } from '../../shared/utils/documents'
@@ -22,6 +22,9 @@ export function ExportModal({
   const [exportMode, setExportMode] = useState<ExportMode>('corpus')
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<number[]>([])
   const [isExporting, setIsExporting] = useState(false)
+  const [scrollThumbHeight, setScrollThumbHeight] = useState(0)
+  const [scrollThumbOffset, setScrollThumbOffset] = useState(0)
+  const documentListRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!isOpen) {
@@ -49,8 +52,37 @@ export function ExportModal({
     )
   }, [documents])
 
+  useEffect(() => {
+    updateCustomScrollbar()
+  }, [documents.length, exportMode, isOpen])
+
   if (!isOpen) {
     return null
+  }
+
+  function updateCustomScrollbar() {
+    const element = documentListRef.current
+
+    if (!element) {
+      return
+    }
+
+    const { clientHeight, scrollHeight, scrollTop } = element
+
+    if (scrollHeight <= clientHeight) {
+      setScrollThumbHeight(0)
+      setScrollThumbOffset(0)
+      return
+    }
+
+    const ratio = clientHeight / scrollHeight
+    const thumbHeight = Math.max(clientHeight * ratio, 28)
+    const maxOffset = clientHeight - thumbHeight
+    const maxScroll = scrollHeight - clientHeight
+    const thumbOffset = maxScroll > 0 ? (scrollTop / maxScroll) * maxOffset : 0
+
+    setScrollThumbHeight(thumbHeight)
+    setScrollThumbOffset(thumbOffset)
   }
 
   function toggleDocument(documentId: number) {
@@ -147,21 +179,39 @@ export function ExportModal({
             </div>
 
             {documents.length > 0 ? (
-              <div className={styles.documentList}>
-                {documents.map((document, index) => {
-                  const isChecked = selectedDocumentIds.includes(document.id)
+              <div className={styles.documentListWrap}>
+                <div
+                  ref={documentListRef}
+                  className={styles.documentList}
+                  onScroll={updateCustomScrollbar}
+                >
+                  {documents.map((document, index) => {
+                    const isChecked = selectedDocumentIds.includes(document.id)
 
-                  return (
-                    <label key={document.id} className={styles.documentOption}>
-                      <input
-                        checked={isChecked}
-                        type="checkbox"
-                        onChange={() => toggleDocument(document.id)}
-                      />
-                      <span>{getDocumentDisplayName(document, index)}</span>
-                    </label>
-                  )
-                })}
+                    return (
+                      <label key={document.id} className={styles.documentOption}>
+                        <input
+                          checked={isChecked}
+                          type="checkbox"
+                          onChange={() => toggleDocument(document.id)}
+                        />
+                        <span>{getDocumentDisplayName(document, index)}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {scrollThumbHeight > 0 ? (
+                  <div className={styles.customScrollbar} aria-hidden="true">
+                    <div
+                      className={styles.customScrollbarThumb}
+                      style={{
+                        height: `${scrollThumbHeight}px`,
+                        transform: `translateY(${scrollThumbOffset}px)`,
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className={styles.hint}>Нет доступных данных для экспорта</p>

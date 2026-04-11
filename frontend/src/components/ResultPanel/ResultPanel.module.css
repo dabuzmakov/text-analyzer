@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 18px;
   flex: 1;
+  min-height: 0;
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-xl);
@@ -29,7 +30,7 @@
 }
 
 .state {
-  min-height: 280px;
+  min-height: 0;
   border: 1px solid var(--border);
   background: var(--surface-soft);
   border-radius: var(--radius-lg);
@@ -37,6 +38,10 @@
   place-items: center;
   text-align: center;
   padding: 24px;
+}
+
+.panel:has(.state) .state {
+  flex: 1;
 }
 
 .state h3 {
@@ -81,7 +86,8 @@
 }
 
 .tableWrap {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
@@ -150,5 +156,24 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1280px) {
+  .panel {
+    padding: 20px;
+    gap: 16px;
+  }
+
+  .summary {
+    gap: 10px;
+  }
+
+  .summaryCard {
+    padding: 14px;
+  }
+
+  .summaryCard strong {
+    font-size: 1.35rem;
   }
 }
