@@ -142,32 +142,30 @@ async def analyze_corpus(request_data: PostAnalysisRequest):
 
 @app.get("/export/csv/{identifier}")
 async def download_csv(identifier: str):
+    """
+    Экспортирует CSV.
+    identifier может быть 'corpus' или ID документа (например, '1').
+    """
+    # Определяем, какой файл кэша искать
     cache_name = "total_corpus" if identifier == "corpus" else identifier
+
     word_counts = load_from_cache(cache_name)
 
     if word_counts is None:
         raise HTTPException(status_code=404, detail="Analysis result not found")
 
-    # 1. Создаем текстовый буфер
     output = io.StringIO()
-
-    # 2. Используем ТАБУЛЯЦИЮ (\t) и WINDOWS-переносы строк (\r\n)
-    # Для Excel в режиме Unicode это самый надежный способ
-    writer = csv.writer(output, delimiter='\t', lineterminator='\r\n')
+    output.write('\ufeff')
+    writer = csv.writer(output)
     writer.writerow(['Слово', 'Частота'])
     writer.writerows(word_counts.most_common())
+    output.seek(0)
 
-    content = output.getvalue()
-    # Кодировка в utf-16 для нормального отображения русского языка
-    response_bytes = content.encode('utf-16')
-
+    # Имя файла для скачивания у пользователя
     download_name = f"{identifier}_analysis.csv"
 
     return StreamingResponse(
-        io.BytesIO(response_bytes),
+        iter([output.getvalue()]),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename={download_name}",
-            "Content-Type": "application/octet-stream"
-        }
+        headers={"Content-Disposition": f"attachment; filename={download_name}"}
     )
