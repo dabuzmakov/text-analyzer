@@ -1,20 +1,18 @@
 import os
 import re
 import csv
-import shutil
+import io
+import json
 from collections import Counter
-from typing import List, Optional, Literal
+from typing import List, Literal, Union
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
-# Инициализация приложения
 app = FastAPI(title="Text Frequency Analysis API")
 
-origins = [
-    "https://text-analyzer-frontend-ra8y.onrender.com",
-]
+origins = ["https://text-analyzer-frontend-ra8y.onrender.com"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -23,189 +21,152 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Директории для хранения данных
 CORPUS_DIR = "corpus_data"
-EXPORTS_DIR = "exports_data"
+CACHE_DIR = "cache_data"
 
-# Создаем папки при старте, если их нет
 os.makedirs(CORPUS_DIR, exist_ok=True)
-os.makedirs(EXPORTS_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 
 # ==========================================
-# Pydantic Модели для валидации данных
+# Модели
 # ==========================================
 
 class DocumentModel(BaseModel):
-    title: str
+    id: int
     content: str
 
 
 class PutCorpusRequest(BaseModel):
     browser_id: str
-    documents: List[DocumentModel] = Field(..., max_length=30, description="Максимум 30 документов")
-
-
-class AnalysisParamsModel(BaseModel):
-    top_n: int = Field(default=20, ge=1)
-    min_word_length: int = Field(default=1, ge=1)
-    order_by: Literal["asc", "desc"] = "desc"
+    documents: List[DocumentModel] = Field(..., max_length=30)
 
 
 class PostAnalysisRequest(BaseModel):
     browser_id: str
-    params: AnalysisParamsModel
+    params: dict = Field(default={"top_n": 20, "min_word_length": 1, "order_by": "desc"})
 
 
 # ==========================================
 # Вспомогательные функции
 # ==========================================
 
-def clear_directory(directory_path: str):
-    """Удаляет все файлы в указанной директории."""
-    for filename in os.listdir(directory_path):
-        file_path = os.path.join(directory_path, filename)
-        if os.path.isfile(file_path):
-            os.unlink(file_path)
-
-
 def extract_words_from_text(text: str, min_length: int) -> List[str]:
-    """Применяет регулярные выражения и фильтрует слова по длине."""
     text = text.lower()
     text = re.sub(r'[^а-яёa-z\'\s]', ' ', text)
     words = re.findall(r"[а-яёa-z]+(?:'[а-яёa-z]+)*", text)
-
     return [word for word in words if len(word) >= min_length]
 
 
+def save_to_cache(name: str, data: Counter):
+    cache_path = os.path.join(CACHE_DIR, f"{name}.json")
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(dict(data), f, ensure_ascii=False)
+
+
+def load_from_cache(name: str) -> Counter:
+    cache_path = os.path.join(CACHE_DIR, f"{name}.json")
+    if not os.path.exists(cache_path):
+        return None
+    with open(cache_path, "r", encoding="utf-8") as f:
+        return Counter(json.load(f))
+
+
 # ==========================================
-# Маршруты (Endpoints)
+# Маршруты
 # ==========================================
 
 @app.put("/corpus")
 async def update_corpus(request_data: PutCorpusRequest):
-    """
-    Принимает JSON с документами, очищает старые данные и сохраняет новые тексты.
-    """
-    # Очищаем старые файлы
-    clear_directory(CORPUS_DIR)
+    # Полная очистка перед сохранением нового корпуса
+    for folder in [CORPUS_DIR, CACHE_DIR]:
+        for f in os.listdir(folder):
+            os.remove(os.path.join(folder, f))
 
-    documents_count = len(request_data.documents)
+    for doc in request_data.documents:
+        # Сохраняем файл, используя его ID как имя
+        file_path = os.path.join(CORPUS_DIR, f"{doc.id}.txt")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(doc.content)
 
-    # Сохраняем новые файлы
-    for index, document in enumerate(request_data.documents):
-        # Используем индекс для безопасного имени файла
-        safe_filename = f"doc_{index:02d}.txt"
-        file_path = os.path.join(CORPUS_DIR, safe_filename)
-
-        with open(file_path, "w", encoding="utf-8") as text_file:
-            text_file.write(document.content)
-
-    return {
-        "status": "success",
-        "data": {
-            "browser_id": request_data.browser_id,
-            "documents_count": documents_count,
-            "message": "Corpus updated"
-        }
-    }
+    return {"status": "success", "message": f"Saved {len(request_data.documents)} documents"}
 
 
 @app.post("/analysis/run")
 async def analyze_corpus(request_data: PostAnalysisRequest):
-    """
-    Анализирует сохраненные тексты, формирует общую статистику и генерирует CSV для каждого файла.
-    """
     params = request_data.params
+    min_len = params.get("min_word_length", 1)
 
     global_word_counter = Counter()
     total_words_count = 0
-    documents_count = 0
 
-    # Очищаем папку с предыдущими экспортами
-    clear_directory(EXPORTS_DIR)
+    # Получаем список всех текстовых файлов (имена это ID)
+    file_list = [f for f in os.listdir(CORPUS_DIR) if f.endswith('.txt')]
 
-    csv_download_urls = []
+    if not file_list:
+        raise HTTPException(status_code=400, detail="Corpus is empty")
 
-    # Читаем все сохраненные файлы
-    for filename in os.listdir(CORPUS_DIR):
-        file_path = os.path.join(CORPUS_DIR, filename)
+    for filename in sorted(file_list):
+        doc_id = filename.replace(".txt", "")
 
-        if not os.path.isfile(file_path):
-            continue
+        with open(os.path.join(CORPUS_DIR, filename), "r", encoding="utf-8") as f:
+            words = extract_words_from_text(f.read(), min_len)
 
-        documents_count += 1
+            file_counter = Counter(words)
+            save_to_cache(doc_id, file_counter)  # Кэш по ID
 
-        with open(file_path, "r", encoding="utf-8") as text_file:
-            content = text_file.read()
+            global_word_counter.update(file_counter)
+            total_words_count += len(words)
 
-        # Извлекаем слова из конкретного документа
-        document_words = extract_words_from_text(content, params.min_word_length)
-        total_words_count += len(document_words)
+    # Кэш для общего отчета
+    save_to_cache("total_corpus", global_word_counter)
 
-        # Обновляем глобальный счетчик
-        global_word_counter.update(document_words)
-
-        # Подготавливаем локальный счетчик для записи в индивидуальный CSV
-        local_word_counter = Counter(document_words)
-        local_most_common = local_word_counter.most_common()
-
-        csv_filename = f"analysis_{filename.replace('.txt', '.csv')}"
-        csv_path = os.path.join(EXPORTS_DIR, csv_filename)
-
-        # Записываем CSV
-        with open(csv_path, 'w', newline='', encoding='utf-8-sig') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['Слово', 'Частота'])
-            writer.writerows(local_most_common)
-
-        # Сохраняем ссылку для фронтенда
-        csv_download_urls.append(f"/export/csv/{csv_filename}")
-
-    # Если файлов не было
-    if documents_count == 0:
-        raise HTTPException(status_code=400, detail="Corpus is empty. Please upload documents first.")
-
-    # Формируем итоговую таблицу по глобальному счетчику
-    if params.order_by == "asc":
-        # Для сортировки по возрастанию берем самые редкие
-        sorted_words = global_word_counter.most_common()[:-params.top_n - 1:-1]
+    top_n = params.get("top_n", 20)
+    if params.get("order_by") == "asc":
+        sorted_words = global_word_counter.most_common()[:-top_n - 1:-1]
     else:
-        # По умолчанию (desc) берем самые частые
-        sorted_words = global_word_counter.most_common(params.top_n)
-
-    result_table = [{"word": word, "count": count} for word, count in sorted_words]
+        sorted_words = global_word_counter.most_common(top_n)
 
     return {
         "status": "success",
         "data": {
-            "applied_filters": {
-                "top_n": params.top_n,
-                "min_word_length": params.min_word_length,
-                "order_by": params.order_by
-            },
             "summary": {
-                "documents_count": documents_count,
+                "documents_count": len(file_list),
                 "total_words": total_words_count,
                 "unique_words": len(global_word_counter)
             },
-            "table": result_table,
-            "csv_downloads": csv_download_urls  # Фронтенд использует этот массив для кнопок скачивания
+            "table": [{"word": w, "count": c} for w, c in sorted_words]
         }
     }
 
 
-@app.get("/export/csv/{filename}")
-async def download_csv(filename: str):
+@app.get("/export/csv/{identifier}")
+async def download_csv(identifier: str):
     """
-    Отдает сгенерированный CSV файл по запросу фронтенда.
+    Экспортирует CSV.
+    identifier может быть 'corpus' или ID документа (например, '1').
     """
-    file_path = os.path.join(EXPORTS_DIR, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+    # Определяем, какой файл кэша искать
+    cache_name = "total_corpus" if identifier == "corpus" else identifier
 
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type='text/csv'
+    word_counts = load_from_cache(cache_name)
+
+    if word_counts is None:
+        raise HTTPException(status_code=404, detail="Analysis result not found")
+
+    output = io.StringIO()
+    output.write('\ufeff')
+    writer = csv.writer(output)
+    writer.writerow(['Слово', 'Частота'])
+    writer.writerows(word_counts.most_common())
+    output.seek(0)
+
+    # Имя файла для скачивания у пользователя
+    download_name = f"{identifier}_analysis.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={download_name}"}
     )
+
