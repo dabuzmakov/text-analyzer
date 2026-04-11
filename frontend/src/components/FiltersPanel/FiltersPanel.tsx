@@ -62,7 +62,7 @@ export function FiltersPanel({ analysisParams, onChange }: FiltersPanelProps) {
         </label>
 
         <label className={styles.field}>
-          <span>Длина слов от:</span>
+          <span>Длина слова от:</span>
           <input
             inputMode="numeric"
             pattern="[0-9]*"

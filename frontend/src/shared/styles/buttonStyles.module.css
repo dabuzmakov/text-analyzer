@@ -1,0 +1,30 @@
+.buttonBase {
+  border-radius: var(--radius-md);
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: border-color 180ms ease, opacity 180ms ease, transform 180ms ease;
+}
+
+.buttonBase:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.buttonSecondary {
+  composes: buttonBase;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.buttonPrimary {
+  composes: buttonBase;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: #fff;
+}
+
+.buttonSecondary:hover:not(:disabled),
+.buttonPrimary:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
