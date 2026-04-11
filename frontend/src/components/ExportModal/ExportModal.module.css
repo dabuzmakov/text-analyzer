@@ -88,26 +88,37 @@
   font-size: 0.9rem;
 }
 
+.documentListWrap {
+  position: relative;
+  min-height: 0;
+}
+
 .documentList {
   max-height: 260px;
   overflow-y: auto;
   overflow-x: hidden;
   display: grid;
   gap: 8px;
-  padding-right: 4px;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.documentList::-webkit-scrollbar {
+  display: none;
 }
 
 .documentOption {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
   background: var(--surface-soft);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
 }
 
 .documentOption span {
@@ -115,6 +126,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.customScrollbar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -10px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(216, 211, 202, 0.35);
+  pointer-events: none;
+}
+
+.customScrollbarThumb {
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(109, 114, 111, 0.7);
+  transition: transform 120ms ease;
 }
 
 .hint {

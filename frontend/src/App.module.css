@@ -19,5 +19,27 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: calc(100vh - 116px);
+  min-height: 0;
+}
+
+@media (min-width: 1100px) and (min-height: 700px) {
+  .grid {
+    min-height: calc(100vh - var(--content-sticky-top) - var(--workspace-padding));
+  }
+
+  .rightColumn {
+    height: calc(100vh - var(--content-sticky-top) - var(--workspace-padding));
+  }
+
+  .rightColumn:has([class*='tableWrap']) {
+    height: auto;
+    min-height: calc(100vh - var(--content-sticky-top) - var(--workspace-padding));
+  }
+}
+
+@media (max-width: 1280px) {
+  .grid {
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 20px;
+  }
 }
