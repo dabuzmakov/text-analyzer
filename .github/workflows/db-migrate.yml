@@ -1,23 +1,14 @@
-name: DB Migrations
+name: DB Migrations (Render Only)
 
 on:
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Migration target"
-        required: true
-        default: "render"
-        type: choice
-        options:
-          - render
 
 jobs:
   migrate-render:
-    name: Migrate Render DB
-    if: ${{ github.event.inputs.target == 'render' || github.event.inputs.target == 'both' }}
+    name: Migrate Render Test DB
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL_RENDER }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_RENDER_TEST }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,5 +18,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Apply migrations to Render DB
-        run: bash scripts/db/apply-migrations.sh
+      - name: Apply migrations to Render test DB
+        run: |
+          cd db-test
+          bash scripts/db/apply-migrations.sh
