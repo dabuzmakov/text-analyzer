@@ -1,0 +1,31 @@
+name: DB Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Migration target"
+        required: true
+        default: "render"
+        type: choice
+        options:
+          - render
+
+jobs:
+  migrate-render:
+    name: Migrate Render DB
+    if: ${{ github.event.inputs.target == 'render' || github.event.inputs.target == 'both' }}
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_RENDER }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply migrations to Render DB
+        run: bash scripts/db/apply-migrations.sh
