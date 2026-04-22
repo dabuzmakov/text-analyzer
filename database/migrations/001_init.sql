@@ -11,12 +11,8 @@ CREATE TABLE IF NOT EXISTS app_clients (
 CREATE TABLE IF NOT EXISTS corpora (
     id BIGSERIAL PRIMARY KEY,
     client_id BIGINT NOT NULL REFERENCES app_clients(id) ON DELETE CASCADE,
-    version INTEGER NOT NULL,
-    documents_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT corpora_version_positive CHECK (version >= 1),
-    CONSTRAINT corpora_documents_count_non_negative CHECK (documents_count >= 0),
-    CONSTRAINT corpora_client_version_uniq UNIQUE (client_id, version)
+    CONSTRAINT corpora_client_uniq UNIQUE (client_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_corpora_client_created_at
@@ -89,5 +85,96 @@ CREATE TABLE IF NOT EXISTS document_analysis_word_stats (
 
 CREATE INDEX IF NOT EXISTS idx_document_analysis_word_stats_run_doc_count_desc
     ON document_analysis_word_stats (analysis_run_id, document_id, count DESC);
+
+CREATE OR REPLACE FUNCTION enforce_documents_limit_per_corpus()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    docs_in_corpus INTEGER;
+BEGIN
+    PERFORM 1
+    FROM corpora
+    WHERE id = NEW.corpus_id
+    FOR UPDATE;
+
+    SELECT COUNT(*)
+    INTO docs_in_corpus
+    FROM documents
+    WHERE corpus_id = NEW.corpus_id;
+
+    IF docs_in_corpus >= 30 THEN
+        RAISE EXCEPTION
+            'Document limit exceeded for corpus_id=% (max 30).',
+            NEW.corpus_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_documents_limit_before_insert ON documents;
+CREATE TRIGGER trg_documents_limit_before_insert
+BEFORE INSERT ON documents
+FOR EACH ROW
+EXECUTE FUNCTION enforce_documents_limit_per_corpus();
+
+CREATE OR REPLACE FUNCTION get_client_corpus_documents(p_client_id BIGINT)
+RETURNS TABLE (
+    corpus_id BIGINT,
+    document_id BIGINT,
+    client_document_id TEXT,
+    title TEXT,
+    content TEXT,
+    token_count INTEGER,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        c.id AS corpus_id,
+        d.id AS document_id,
+        d.client_document_id,
+        d.title,
+        d.content,
+        d.token_count,
+        d.created_at
+    FROM corpora c
+    JOIN documents d ON d.corpus_id = c.id
+    WHERE c.client_id = p_client_id
+    ORDER BY d.created_at DESC, d.id DESC;
+$$;
+
+CREATE OR REPLACE FUNCTION get_client_corpus_documents_by_browser_id(p_browser_id TEXT)
+RETURNS TABLE (
+    client_id BIGINT,
+    corpus_id BIGINT,
+    document_id BIGINT,
+    client_document_id TEXT,
+    title TEXT,
+    content TEXT,
+    token_count INTEGER,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT
+        ac.id AS client_id,
+        c.id AS corpus_id,
+        d.id AS document_id,
+        d.client_document_id,
+        d.title,
+        d.content,
+        d.token_count,
+        d.created_at
+    FROM app_clients ac
+    JOIN corpora c ON c.client_id = ac.id
+    JOIN documents d ON d.corpus_id = c.id
+    WHERE ac.browser_id = p_browser_id
+    ORDER BY d.created_at DESC, d.id DESC;
+$$;
 
 COMMIT;
