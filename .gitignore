@@ -101,3 +101,8 @@ desktop.ini
 !docs/**/*.csv
 !tests/**/*.csv
 !**/fixtures/**/*.csv
+
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+backend/__pycache__/
