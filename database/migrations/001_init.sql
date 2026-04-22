@@ -1,11 +1,5 @@
 BEGIN;
 
--- ==========================================
--- Text Analyzer DB Schema (PostgreSQL)
--- Iteration 1: minimal model
--- One client -> many documents
--- ==========================================
-
 CREATE TABLE IF NOT EXISTS app_clients (
     id BIGSERIAL PRIMARY KEY,
     browser_id TEXT NOT NULL UNIQUE,
@@ -34,7 +28,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_client_client_document_id_uniq
 CREATE INDEX IF NOT EXISTS idx_documents_client_created_at
     ON documents (client_id, created_at DESC);
 
--- Limit user corpus to 30 documents on insert.
 CREATE OR REPLACE FUNCTION enforce_documents_limit_per_client()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -42,7 +35,6 @@ AS $$
 DECLARE
     docs_in_client INTEGER;
 BEGIN
-    -- Serialize inserts per client to avoid race conditions.
     PERFORM 1
     FROM app_clients
     WHERE id = NEW.client_id
@@ -70,7 +62,6 @@ BEFORE INSERT ON documents
 FOR EACH ROW
 EXECUTE FUNCTION enforce_documents_limit_per_client();
 
--- Helper: resolve internal client id by browser id.
 CREATE OR REPLACE FUNCTION get_client_id_by_browser_id(p_browser_id TEXT)
 RETURNS BIGINT
 LANGUAGE sql
@@ -82,7 +73,6 @@ AS $$
     LIMIT 1;
 $$;
 
--- Helper: fetch latest uploaded docs for one client id.
 CREATE OR REPLACE FUNCTION get_client_documents(p_client_id BIGINT)
 RETURNS TABLE (
     document_id BIGINT,
@@ -107,7 +97,6 @@ AS $$
     ORDER BY d.created_at DESC, d.id DESC;
 $$;
 
--- Helper: same lookup by browser id (frontend-friendly key).
 CREATE OR REPLACE FUNCTION get_client_documents_by_browser_id(p_browser_id TEXT)
 RETURNS TABLE (
     client_id BIGINT,
