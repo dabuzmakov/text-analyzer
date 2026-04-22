@@ -13,6 +13,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database:
+    name: Database Schema Check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: text_analyzer
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d text_analyzer"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply DB migration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/text_analyzer
+        run: bash scripts/db/apply-migrations.sh
+
+      - name: Validate required tables
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d text_analyzer -v ON_ERROR_STOP=1 -c "
+          DO \$\$
+          DECLARE
+            required_count INTEGER;
+          BEGIN
+            SELECT COUNT(*) INTO required_count
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name IN (
+                'app_clients',
+                'corpora',
+                'documents',
+                'analysis_runs',
+                'analysis_word_stats',
+                'document_analysis_word_stats'
+              );
+
+            IF required_count <> 6 THEN
+              RAISE EXCEPTION 'Schema validation failed: expected 6 required tables, got %', required_count;
+            END IF;
+          END
+          \$\$;
+          "
+
   frontend:
     name: Frontend Build
     runs-on: ubuntu-latest
@@ -63,3 +122,4 @@ jobs:
 
       - name: Import ASGI app
         run: python -c "from main import app; assert app.title == 'Text Frequency Analysis API'"
+        
