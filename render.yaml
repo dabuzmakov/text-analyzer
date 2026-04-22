@@ -1,3 +1,9 @@
+databases:
+  - name: text-analyzer-postgres
+    databaseName: text_analyzer
+    user: text_analyzer
+    plan: free
+
 services:
   - type: web
     name: text-analyzer-backend
@@ -8,6 +14,10 @@ services:
     autoDeployTrigger: checksPass
     healthCheckPath: /docs
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: text-analyzer-postgres
+          property: connectionString
       - key: CORS_ALLOW_ORIGINS
         sync: false
   - type: web
