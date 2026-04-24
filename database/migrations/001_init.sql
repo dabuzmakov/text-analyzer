@@ -47,7 +47,7 @@ BEGIN
 
     IF docs_in_client >= 30 THEN
         RAISE EXCEPTION
-            'Document limit exceeded for client_id=% (max 30).',
+            'Превышен лимит документов для client_id=% (максимум 30).',
             NEW.client_id
             USING ERRCODE = 'check_violation';
     END IF;
