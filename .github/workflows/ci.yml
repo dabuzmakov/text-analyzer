@@ -1,4 +1,4 @@
-name: CI (DB Test Workspace)
+name: CI
 
 on:
   pull_request:
@@ -7,6 +7,10 @@ on:
   push:
     branches:
       - master
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   database:
@@ -38,16 +42,61 @@ jobs:
       - name: Apply DB migration
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/text_analyzer
+        run: bash scripts/db/apply-migrations.sh
+
+      - name: Validate required DB objects
+        env:
+          PGPASSWORD: postgres
         run: |
-          cd db-test
-          bash scripts/db/apply-migrations.sh
+          psql -h localhost -U postgres -d text_analyzer -v ON_ERROR_STOP=1 -c "
+          DO \$\$
+          DECLARE
+            required_count INTEGER;
+            trigger_count INTEGER;
+            function_count INTEGER;
+          BEGIN
+            SELECT COUNT(*) INTO required_count
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name IN (
+                'app_clients',
+                'documents'
+              );
+
+            IF required_count <> 2 THEN
+              RAISE EXCEPTION 'Schema validation failed: expected 2 required tables, got %', required_count;
+            END IF;
+
+            SELECT COUNT(*) INTO trigger_count
+            FROM pg_trigger
+            WHERE NOT tgisinternal
+              AND tgname = 'trg_documents_limit_per_client_before_insert';
+
+            IF trigger_count <> 1 THEN
+              RAISE EXCEPTION 'Schema validation failed: expected trigger trg_documents_limit_per_client_before_insert';
+            END IF;
+
+            SELECT COUNT(*) INTO function_count
+            FROM pg_proc
+            WHERE proname IN (
+              'get_client_id_by_browser_id',
+              'get_client_documents',
+              'get_client_documents_by_browser_id'
+            );
+
+            IF function_count <> 3 THEN
+              RAISE EXCEPTION 'Schema validation failed: expected 3 helper SQL functions, got %', function_count;
+            END IF;
+          END
+          \$\$;
+          "
 
   frontend:
     name: Frontend Build
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: db-test/frontend
+        working-directory: frontend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,7 +106,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: db-test/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -70,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: db-test/backend
+        working-directory: backend
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -78,9 +127,9 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: db-test/backend/requirements.txt
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
@@ -89,3 +138,7 @@ jobs:
 
       - name: Compile backend entrypoint
         run: python -m compileall main.py
+
+      - name: Import ASGI app
+        run: python -c "from main import app; assert app.title == 'Text Frequency Analysis API'"
+        
