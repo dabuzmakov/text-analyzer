@@ -5,10 +5,10 @@ on:
 
 jobs:
   migrate-render:
-    name: Migrate Render Test DB
+    name: Migrate Render DB
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL_RENDER_TEST }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_RENDER }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -18,7 +18,5 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Apply migrations to Render test DB
-        run: |
-          cd db-test
-          bash scripts/db/apply-migrations.sh
+      - name: Apply migrations to Render DB
+        run: bash scripts/db/apply-migrations.sh
