@@ -149,8 +149,8 @@ async def update_corpus(request_data: PutCorpusRequest):
                     title = f"document_{doc.id}"
                     await conn.execute(
                         """
-                        INSERT INTO documents (client_id, client_document_id, title, content, token_count)
-                        VALUES ($1, $2, $3, $4, 0)
+                        INSERT INTO documents (client_id, client_document_id, title, content)
+                        VALUES ($1, $2, $3, $4)
                         """,
                         client_id, client_document_id, title, doc.content
                     )
