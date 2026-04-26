@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { downloadCsv, runAnalysis, saveCorpus } from '../api/client'
 import { APP_MESSAGES } from '../constants/messages'
 import type { AnalysisParams, AnalysisResponse, UiDocument } from '../types'
+import { toPositiveInteger } from '../utils/analysisParams'
 import { getDocumentDisplayName, toCsvFileName } from '../utils/documents'
 
 type UseAnalyzerActionsParams = {
@@ -11,22 +12,6 @@ type UseAnalyzerActionsParams = {
   onExportError: (message: string) => void
   onSaveError: (message: string) => void
   onSaveSuccess: (message: string) => void
-}
-
-function normalizeNumberInput(value: string, fallback: number) {
-  const trimmedValue = value.trim()
-
-  if (!trimmedValue) {
-    return fallback
-  }
-
-  const parsedValue = Number(trimmedValue)
-
-  if (Number.isNaN(parsedValue) || parsedValue < 1) {
-    return fallback
-  }
-
-  return Math.floor(parsedValue)
 }
 
 function getErrorMessage(error: unknown) {
@@ -53,6 +38,7 @@ export function useAnalyzerActions({
   const [isSaving, setIsSaving] = useState(false)
   const [isCorpusSaved, setIsCorpusSaved] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const saveRequestIdRef = useRef(0)
 
   function markCorpusAsChanged() {
     setIsCorpusSaved(false)
@@ -67,6 +53,9 @@ export function useAnalyzerActions({
   }
 
   async function handleSaveCorpus() {
+    const saveRequestId = saveRequestIdRef.current + 1
+    saveRequestIdRef.current = saveRequestId
+
     setIsSaving(true)
     setAnalysisError('')
 
@@ -79,18 +68,24 @@ export function useAnalyzerActions({
         })),
       })
 
-      setIsCorpusSaved(true)
-      setHasUnsavedChanges(false)
-      setHasSuccessfulAnalysis(false)
-      onSaveSuccess(APP_MESSAGES.saveSuccess)
+      if (saveRequestId === saveRequestIdRef.current) {
+        setIsCorpusSaved(true)
+        setHasUnsavedChanges(false)
+        setHasSuccessfulAnalysis(false)
+        onSaveSuccess(APP_MESSAGES.saveSuccess)
+      }
     } catch (error) {
       const message = getErrorMessage(error)
-      onSaveError(message)
-      setIsCorpusSaved(false)
-      setHasUnsavedChanges(true)
-      setHasSuccessfulAnalysis(false)
+      if (saveRequestId === saveRequestIdRef.current) {
+        onSaveError(message)
+        setIsCorpusSaved(false)
+        setHasUnsavedChanges(true)
+        setHasSuccessfulAnalysis(false)
+      }
     } finally {
-      setIsSaving(false)
+      if (saveRequestId === saveRequestIdRef.current) {
+        setIsSaving(false)
+      }
     }
   }
 
@@ -102,8 +97,8 @@ export function useAnalyzerActions({
       const result = await runAnalysis({
         browser_id: browserId,
         params: {
-          top_n: normalizeNumberInput(analysisParams.topN, 20),
-          min_word_length: normalizeNumberInput(analysisParams.minWordLength, 3),
+          top_n: toPositiveInteger(analysisParams.topN, 20),
+          min_word_length: toPositiveInteger(analysisParams.minWordLength, 3),
           order_by: analysisParams.orderBy,
         },
       })

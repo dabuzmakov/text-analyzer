@@ -1,23 +1,26 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 1000;
+  isolation: isolate;
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(18, 25, 38, 0.22);
+  background: var(--color-backdrop);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  overscroll-behavior: contain;
 }
 
 .modal {
   width: min(100%, 640px);
   max-height: min(100%, 720px);
   display: grid;
-  gap: 18px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  gap: 16px;
+  background: var(--color-surface-popover);
   border-radius: var(--radius-xl);
-  box-shadow: 0 24px 80px rgba(16, 24, 40, 0.12);
-  padding: 24px;
+  box-shadow: var(--shadow-elevated);
+  padding: 22px;
   overflow: hidden;
 }
 
@@ -30,14 +33,16 @@
   margin: 0;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  font-weight: 800;
 }
 
 .title {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 1.16rem;
+  font-weight: 800;
 }
 
 .modes {
@@ -47,25 +52,65 @@
 
 .modeCard {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 16px 36px minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: center;
   border: 1px solid var(--border);
-  background: var(--surface-soft);
+  background: var(--surface);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .modeCard input {
-  margin-top: 3px;
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  align-self: center;
+  justify-self: center;
 }
 
-.modeCard strong,
-.modeCard span {
+.modeCard:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--color-accent-active);
+  box-shadow: var(--shadow-control);
+}
+
+.modeIcon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--surface-tint);
+  color: var(--primary);
+  line-height: 0;
+  align-self: center;
+  justify-self: center;
+  overflow: hidden;
+}
+
+.modeIcon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.modeText {
+  min-width: 0;
+}
+
+.modeText strong,
+.modeText span {
   display: block;
 }
 
-.modeCard span {
+.modeText span {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 0.9rem;
@@ -74,6 +119,11 @@
 .selectionBlock {
   display: grid;
   gap: 12px;
+  min-height: 0;
+}
+
+.selectionBlockHidden {
+  display: none;
 }
 
 .selectionHeader {
@@ -86,11 +136,13 @@
 .selectionHeader span {
   color: var(--text-muted);
   font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .documentListWrap {
   position: relative;
   min-height: 0;
+  contain: layout paint;
 }
 
 .documentList {
@@ -103,6 +155,7 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  transform: translateZ(0);
 }
 
 .documentList::-webkit-scrollbar {
@@ -116,9 +169,21 @@
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
-  background: var(--surface-soft);
+  background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 12px 14px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.documentOption:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-tint);
+}
+
+.documentOption input {
+  accent-color: var(--primary);
 }
 
 .documentOption span {
@@ -135,15 +200,23 @@
   left: -10px;
   width: 2px;
   border-radius: 999px;
-  background: rgba(216, 211, 202, 0.35);
+  background: var(--color-scroll-track);
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 120ms ease;
+}
+
+.customScrollbar[data-visible='true'] {
+  opacity: 1;
+  visibility: visible;
 }
 
 .customScrollbarThumb {
   width: 100%;
   border-radius: 999px;
-  background: rgba(109, 114, 111, 0.7);
-  transition: transform 120ms ease;
+  background: var(--color-scroll-thumb);
+  will-change: transform, height;
 }
 
 .hint {
@@ -157,4 +230,46 @@
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: start;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .modeCard {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .modeIcon {
+    display: none;
+  }
+
+  .selectionHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .selectionHeader button,
+  .actions button {
+    width: 100%;
+  }
+
+  .documentList {
+    max-height: min(240px, 38vh);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
 }

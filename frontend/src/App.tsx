@@ -1,9 +1,7 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import { AppHeader } from './components/AppHeader'
-import { CorpusPanel } from './components/CorpusPanel'
-import { FiltersPanel } from './components/FiltersPanel'
+import { Main } from './components/Main'
 import { ManualDocumentModal } from './components/ManualDocumentModal'
-import { ResultPanel } from './components/ResultPanel'
 import { Toast } from './components/Toast'
 import appStyles from './App.module.css'
 import { APP_MESSAGES } from './shared/constants/messages'
@@ -14,6 +12,7 @@ import type {
 } from './shared/types'
 import type { UiDocument } from './shared/types'
 import { getOrCreateBrowserId } from './shared/utils/browser'
+import { sanitizePositiveIntegerInput } from './shared/utils/analysisParams'
 import { createUiDocument } from './shared/utils/documents'
 import { readTextFile } from './shared/utils/files'
 
@@ -40,6 +39,22 @@ type ToastState = {
   message: string
 }
 
+function normalizeAnalysisParams(
+  candidate: Partial<AnalysisParams> | null | undefined,
+): AnalysisParams {
+  return {
+    topN: sanitizePositiveIntegerInput(candidate?.topN, defaultParams.topN),
+    minWordLength: sanitizePositiveIntegerInput(
+      candidate?.minWordLength,
+      defaultParams.minWordLength,
+    ),
+    orderBy:
+      candidate?.orderBy === 'asc' || candidate?.orderBy === 'desc'
+        ? candidate.orderBy
+        : defaultParams.orderBy,
+  }
+}
+
 function loadStoredParams() {
   const storedParams = localStorage.getItem(ANALYSIS_PARAMS_STORAGE_KEY)
 
@@ -48,7 +63,7 @@ function loadStoredParams() {
   }
 
   try {
-    return { ...defaultParams, ...JSON.parse(storedParams) }
+    return normalizeAnalysisParams(JSON.parse(storedParams) as Partial<AnalysisParams>)
   } catch {
     return defaultParams
   }
@@ -64,6 +79,7 @@ export default function App() {
   const [nextDocumentId, setNextDocumentId] = useState(1)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [isToastVisible, setIsToastVisible] = useState(false)
+  const didMountDocumentsRef = useRef(false)
 
   const {
     analysisError,
@@ -83,12 +99,27 @@ export default function App() {
     documents,
     onExportError: (message) => showToast(message, 'error'),
     onSaveError: (message) => showToast(message, 'error'),
-    onSaveSuccess: (message) => showToast(message, 'success'),
+    onSaveSuccess: () => undefined,
   })
 
   useEffect(() => {
     localStorage.setItem(ANALYSIS_PARAMS_STORAGE_KEY, JSON.stringify(analysisParams))
   }, [analysisParams])
+
+  useEffect(() => {
+    if (!didMountDocumentsRef.current) {
+      didMountDocumentsRef.current = true
+      return
+    }
+
+    const saveTimer = window.setTimeout(() => {
+      void handleSaveCorpus()
+    }, 250)
+
+    return () => {
+      window.clearTimeout(saveTimer)
+    }
+  }, [documents])
 
   useEffect(() => {
     let hideTimer = 0
@@ -112,7 +143,6 @@ export default function App() {
 
   const isDocumentLimitReached = documents.length >= MAX_DOCUMENTS
   const isEditingDocument = editingDocumentId !== null
-  const canSave = documents.length > 0 && !isSaving
   const canAnalyze =
     documents.length > 0 &&
     isCorpusSaved &&
@@ -163,9 +193,18 @@ export default function App() {
   }
 
   function updateAnalysisParam(field: keyof AnalysisParams, value: string) {
-    setAnalysisParams({
-      ...analysisParams,
-      [field]: value,
+    setAnalysisParams((current) => {
+      if (field === 'topN' || field === 'minWordLength') {
+        return {
+          ...current,
+          [field]: sanitizePositiveIntegerInput(value, current[field]),
+        }
+      }
+
+      return {
+        ...current,
+        orderBy: value as AnalysisParams['orderBy'],
+      }
     })
   }
 
@@ -263,40 +302,25 @@ export default function App() {
 
         <AppHeader />
 
-        <main className={appStyles.workspace}>
-          <div className={appStyles.grid}>
-            <CorpusPanel
-              canUpload={!isDocumentLimitReached}
-              documents={documents}
-              maxDocuments={MAX_DOCUMENTS}
-              onAddManual={openCreateModal}
-              onEditDocument={handleEditDocument}
-              onFilesAdded={handleFilesAdded}
-              onRemoveDocument={handleRemoveDocument}
-            />
-
-            <section className={appStyles.rightColumn}>
-              <FiltersPanel
-                analysisParams={analysisParams}
-                onChange={updateAnalysisParam}
-              />
-
-              <ResultPanel
-                analysisError={analysisError}
-                analysisResult={analysisResult}
-                canAnalyze={canAnalyze}
-                canExport={canExport}
-                documents={documents}
-                isAnalyzing={isAnalyzing}
-                isSaving={isSaving}
-                onAnalyze={handleAnalyze}
-                onExport={handleExport}
-                onSave={handleSaveCorpus}
-                saveDisabled={!canSave}
-              />
-            </section>
-          </div>
-        </main>
+        <Main
+          analysisError={analysisError}
+          analysisParams={analysisParams}
+          analysisResult={analysisResult}
+          canAnalyze={canAnalyze}
+          canExport={canExport}
+          canUpload={!isDocumentLimitReached}
+          documents={documents}
+          isAnalyzing={isAnalyzing}
+          isSaving={isSaving}
+          maxDocuments={MAX_DOCUMENTS}
+          onAddManual={openCreateModal}
+          onAnalyze={handleAnalyze}
+          onChangeAnalysisParam={updateAnalysisParam}
+          onEditDocument={handleEditDocument}
+          onExport={handleExport}
+          onFilesAdded={handleFilesAdded}
+          onRemoveDocument={handleRemoveDocument}
+        />
       </div>
 
       <ManualDocumentModal

@@ -1,54 +1,217 @@
-# TextTreasure — Анализ частотности слов
+# Лексема
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)
-![License](https://img.shields.io/badge/license-MIT-green)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org/)
+[![Render](https://img.shields.io/badge/Render-部署-46E3B7?logo=render)](https://render.com/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**TextTreasure** — это веб-приложение для частотного анализа текстов. Оно позволяет собирать корпус документов, проводить их предобработку и получать наглядную статистику по частоте слов.
+Веб-приложение для частотного анализа текстов с возможностью настраивать параметры анализа и экспортировать результаты в CSV.
 
-Одна из основных особенностей — это возможность выгрузить результаты анализа в формате `CSV` для последующей работы в Excel, BI-системах или любых других инструментах.
+Деплой: [https://text-analyzer-frontend-ra8y.onrender.com/](https://text-analyzer-frontend-ra8y.onrender.com/)
 
-🌐 **Деплой:** [https://text-analyzer-frontend-ra8y.onrender.com/](https://text-analyzer-frontend-ra8y.onrender.com/)
+## Возможности
 
----
+- загрузка `.txt` файлов через проводник и drag-and-drop;
+- создание и редактирование документов прямо в интерфейсе;
+- работа с корпусом до 30 документов;
+- частотный анализ слов по всему корпусу;
+- фильтрация по:
+  - `Top-N`
+  - минимальной длине слова
+  - порядку сортировки;
+- просмотр:
+  - общей статистики;
+  - таблицы частот;
+- экспорт:
+  - общего CSV по корпусу;
+  - CSV по выбранным документам.
 
-## ✨ Ключевые возможности
+## Архитектура
 
-*   **Добавление текстов:** Загрузка `.txt`-файлов или создание документов прямо во встроенном редакторе.
-*   **Предобработка и токенизация:** Приведение к нижнему регистру, очистка от пунктуации, удаление цифр, разбиение на слова, фильтрация по минимальной длине.
-*   **Расчет частот:** Подсчет частоты каждого слова во всем корпусе и вывод в виде таблицы "Слово — Частота".
-*   **Управление корпусом:** Работа с несколькими документами одновременно (до 30), редактирование и удаление.
-*   **Гибкие фильтры:**
-    *   `Top-N` (ограничение количества выводимых слов).
-    *   `Сортировка по частоте` (по убыванию или возрастанию).
-    *   `Минимальная длина слова` (чтобы отсеять очень короткие или служебные слова).
-*   **Удобная фича:** Экспорт результатов анализа в формате **`CSV`** для использования в других приложениях.
-*   **Сохранение состояния:** Сессия пользователя и примененные фильтры сохраняются в `localStorage` браузера.
-*   **API для интеграции:** Простое REST API для встраивания анализа в другие системы.
+Проект состоит из трех основных частей:
 
----
+- `frontend` — клиентское приложение на React + TypeScript;
+- `backend` — REST API на FastAPI;
+- `database` — схема PostgreSQL и SQL-миграции.
 
-## 🛠 Стек технологий и команда
+Дополнительно в репозитории есть:
 
-### Frontend (Разработчик: Бузмаков Даниил Александрович)
-*   [React 19](https://react.dev/) — библиотека для построения пользовательских интерфейсов.
-*   [TypeScript](https://www.typescriptlang.org/) — статическая типизация.
-*   [Vite](https://vitejs.dev/) — инструмент сборки фронтенда.
+- `scripts/db` — скрипты применения миграций;
+- `.github/workflows` — CI и миграции;
+- `render.yaml` — конфигурация деплоя на Render.
 
-### Backend (Разработчик: Бусыгин Степан Алексеевич)
-*   [Python 3.12](https://www.python.org/) — язык программирования.
-*   [FastAPI](https://fastapi.tiangolo.com/) — современный и быстрый веб-фреймворк для создания API.
-*   `re`, `collections.Counter` — для обработки текста и подсчета статистики.
+## Стек
 
-### DevOps и Инфраструктура, база данных (DevOps: Костарев Егор Евгеньевич)
-*   **Хостинг:** [Render](https://render.com/) для бекенда и статики фронтенда, PostgreSQL как облачная база данных.
-*   **CI/CD:** GitHub Actions для автоматических проверок (`ci.yml`) и миграций баз данных (`db-migrate.yml`).
-*   **Контроль версий:** Git, GitHub.
-*   [PostgreSQL](https://www.postgresql.org/) — реляционная база данных для хранения корпуса текстов и метаинформации.
+### Frontend
 
-### TeamLead/Документация/Аналитика (Губин Павел Сергеевич)
-### Тестирование (Четвертных Лев Константинович)
----
+- React 19
+- TypeScript
+- Vite
+- CSS Modules
+- lucide-react
+
+### Backend
+
+- Python 3.12
+- FastAPI
+- Pydantic
+
+### Database / Infra
+
+- PostgreSQL
+- GitHub Actions
+- Render
+
+## Структура репозитория
+
+```text
+text-analyzer/
+├─ backend/                  # FastAPI backend
+├─ frontend/                 # React/Vite frontend
+├─ database/migrations/      # SQL-миграции
+├─ scripts/db/               # запуск миграций
+├─ .github/workflows/        # CI / DB migration workflows
+├─ API.md                    # описание API
+├─ render.yaml               # deploy config
+└─ README.md
+```
+
+## Быстрый старт
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv .venv
+```
+
+Windows:
+
+```bash
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+macOS / Linux:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Backend будет доступен на `http://localhost:8000`.
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+Создай `frontend/.env.local`:
+
+```env
+VITE_USE_MOCK_API=false
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Запуск:
+
+```bash
+npm run dev
+```
+
+Frontend будет доступен на `http://127.0.0.1:5173`.
+
+### 3. Миграции базы данных
+
+Если нужно применить SQL-миграции вручную:
+
+```bash
+export DATABASE_URL=postgresql://user:password@host:5432/dbname
+bash scripts/db/apply-migrations.sh
+```
+
+Для Windows удобнее запускать из Git Bash / WSL.
+
+## Переменные окружения
+
+### Frontend
+
+- `VITE_USE_MOCK_API`
+  - `true` — использовать mock API;
+  - `false` — использовать реальный backend.
+- `VITE_API_BASE_URL`
+  - базовый URL backend.
+
+### Backend
+
+- `DATABASE_URL`
+  - строка подключения к PostgreSQL;
+- `CORS_ALLOW_ORIGINS`
+  - список разрешенных origin'ов для CORS.
+
+## Команды
+
+### Frontend
+
+```bash
+npm run dev
+npm run build
+npm run preview
+```
+
+### Backend
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m compileall main.py
+```
+
+## API
+
+Основные endpoint'ы:
+
+- `PUT /corpus`
+- `POST /analysis/run`
+- `GET /export/csv/{identifier}`
+
+Подробный контракт описан в [API.md](./API.md).
+
+## CI / Deploy
+
+В проекте уже настроены:
+
+- `CI` workflow:
+  - проверка SQL-схемы;
+  - сборка frontend;
+  - smoke-check backend;
+- `DB Migrations (Render Only)` workflow для применения миграций;
+- `render.yaml` для frontend, backend и PostgreSQL.
+
+## Команда
+
+### Frontend
+
+- Бузмаков Даниил Александрович
+
+### Backend
+
+- Бусыгин Степан Алексеевич
+
+### DevOps / База данных
+
+- Костарев Егор Евгеньевич
+
+### TeamLead / Документация / Аналитика
+
+- Губин Павел Сергеевич
+
+### Тестирование
+
+- Четвертных Лев Константинович

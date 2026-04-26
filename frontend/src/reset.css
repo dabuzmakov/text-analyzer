@@ -10,6 +10,11 @@ body,
   min-height: 100%;
 }
 
+html,
+body {
+  overflow-x: clip;
+}
+
 html:focus-within {
   scroll-behavior: smooth;
 }

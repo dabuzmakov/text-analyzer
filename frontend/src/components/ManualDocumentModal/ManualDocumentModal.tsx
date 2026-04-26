@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import { Check, FilePenLine, FilePlus, X } from 'lucide-react'
 import type { ManualForm } from '../../shared/types'
 import styles from './ManualDocumentModal.module.css'
 
@@ -27,12 +28,21 @@ export function ManualDocumentModal({
     <div aria-modal="true" className={styles.backdrop} role="dialog" onClick={onClose}>
       <div className={styles.card} onClick={(event) => event.stopPropagation()}>
         <div className={styles.heading}>
-          <p className={styles.kicker}>
-            {isEditing ? 'Редактирование текста' : 'Создание текста'}
-          </p>
-          <h2 className={styles.title}>
-            {isEditing ? 'Изменить документ' : 'Новый документ'}
-          </h2>
+          <span className={styles.headingIcon}>
+            {isEditing ? (
+              <FilePenLine aria-hidden="true" size={18} strokeWidth={1.8} />
+            ) : (
+              <FilePlus aria-hidden="true" size={18} strokeWidth={1.8} />
+            )}
+          </span>
+          <div>
+            <p className={styles.kicker}>
+              {isEditing ? 'Редактирование текста' : 'Создание текста'}
+            </p>
+            <h2 className={styles.title}>
+              {isEditing ? 'Изменить документ' : 'Новый документ'}
+            </h2>
+          </div>
         </div>
 
         <form className={styles.form} onSubmit={onSubmit}>
@@ -58,9 +68,11 @@ export function ManualDocumentModal({
 
           <div className={styles.actions}>
             <button className={styles.lightButton} type="button" onClick={onClose}>
+              <X aria-hidden="true" size={16} strokeWidth={1.9} />
               Отмена
             </button>
             <button className={styles.darkButton} type="submit">
+              <Check aria-hidden="true" size={16} strokeWidth={1.9} />
               {isEditing ? 'Сохранить изменения' : 'Добавить текст'}
             </button>
           </div>

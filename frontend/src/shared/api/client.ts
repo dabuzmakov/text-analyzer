@@ -18,21 +18,107 @@ type ApiEnvelope<T> = T & {
   message?: string
 }
 
-const MOCK_ANALYSIS_TABLE: FrequencyRow[] = [
-  { word: 'текст', count: 54 },
-  { word: 'данные', count: 43 },
-  { word: 'анализ', count: 38 },
-  { word: 'корпус', count: 29 },
-  { word: 'документ', count: 24 },
+type ApiErrorEnvelope = {
+  detail?: string | Array<{ msg?: string }>
+  message?: string
+  status?: string
+}
+
+const MOCK_ANALYSIS_WORDS = [
+  'текст',
+  'данные',
+  'анализ',
+  'корпус',
+  'документ',
+  'частота',
+  'слово',
+  'таблица',
+  'результат',
+  'фильтр',
+  'загрузка',
+  'создание',
+  'экспорт',
+  'сохранение',
+  'интерфейс',
+  'панель',
+  'выборка',
+  'лексема',
+  'модуль',
+  'форма',
+  'кнопка',
+  'строка',
+  'колонка',
+  'параметр',
+  'значение',
+  'сортировка',
+  'минимум',
+  'максимум',
+  'подсчёт',
+  'отчёт',
+  'файл',
+  'проводник',
+  'редактор',
+  'сводка',
+  'метрика',
+  'частотность',
+  'токен',
+  'норма',
+  'поиск',
+  'проверка',
+  'адаптация',
+  'экран',
+  'монитор',
+  'планшет',
+  'телефон',
+  'прокрутка',
+  'заголовок',
+  'область',
+  'макет',
+  'контент',
+  'позиция',
+  'раздел',
+  'граница',
+  'отступ',
+  'радиус',
+  'фон',
+  'тень',
+  'состояние',
+  'ошибка',
+  'успех',
+  'запрос',
+  'ответ',
+  'сервер',
+  'клиент',
+  'массив',
+  'объект',
+  'счётчик',
+  'словарь',
+  'вывод',
+  'пример',
+  'тест',
+  'сценарий',
+  'разметка',
+  'компонент',
+  'приложение',
+  'проект',
+  'логика',
+  'наблюдение',
+  'контроль',
+  'итог',
 ]
+
+const MOCK_ANALYSIS_TABLE: FrequencyRow[] = MOCK_ANALYSIS_WORDS.map((word, index) => ({
+  word,
+  count: Math.max(3, 96 - index),
+}))
 
 const MOCK_ANALYSIS_RESPONSE: AnalysisResponse = {
   status: 'success',
   data: {
     summary: {
       documents_count: 3,
-      total_words: 4200,
-      unique_words: 830,
+      total_words: 12840,
+      unique_words: MOCK_ANALYSIS_TABLE.length,
     },
     table: MOCK_ANALYSIS_TABLE,
   },
@@ -104,6 +190,33 @@ function getFileNameFromDisposition(
   return identifier === 'corpus' ? 'statistics.csv' : `document-${identifier}.csv`
 }
 
+function getApiErrorMessage(payload: ApiErrorEnvelope | null, status: number) {
+  if (!payload) {
+    return APP_MESSAGES.requestError(status)
+  }
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message
+  }
+
+  if (typeof payload.detail === 'string' && payload.detail.trim()) {
+    return payload.detail
+  }
+
+  if (Array.isArray(payload.detail)) {
+    const detailMessage = payload.detail
+      .map((item) => item.msg?.trim())
+      .filter((message): message is string => Boolean(message))
+      .join('; ')
+
+    if (detailMessage) {
+      return detailMessage
+    }
+  }
+
+  return APP_MESSAGES.requestError(status)
+}
+
 async function request<T>(
   path: string,
   method: 'POST' | 'PUT',
@@ -126,7 +239,9 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    throw new Error(parsed?.message || APP_MESSAGES.requestError(response.status))
+    throw new Error(
+      getApiErrorMessage(parsed as ApiErrorEnvelope | null, response.status),
+    )
   }
 
   if (!parsed || parsed.status !== 'success') {
@@ -181,7 +296,15 @@ export async function downloadCsv(identifier: string, preferredFileName?: string
   )
 
   if (!response.ok) {
-    throw new Error(APP_MESSAGES.downloadCsvError)
+    let payload: ApiErrorEnvelope | null = null
+
+    try {
+      payload = (await response.json()) as ApiErrorEnvelope
+    } catch {
+      payload = null
+    }
+
+    throw new Error(getApiErrorMessage(payload, response.status))
   }
 
   const blob = await response.blob()
