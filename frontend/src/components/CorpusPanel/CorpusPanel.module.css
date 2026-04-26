@@ -1,16 +1,18 @@
 .panel {
   position: sticky;
-  top: var(--content-sticky-top);
-  height: calc(100vh - var(--content-sticky-top) - var(--workspace-padding));
+  top: 16px;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
+  max-height: calc(100dvh - var(--header-offset) - 32px);
+  align-self: start;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow);
-  padding: 24px;
-  gap: 14px;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  gap: 8px;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease,
@@ -18,43 +20,70 @@
 }
 
 .panelDragging {
-  border-color: var(--border-strong);
-  box-shadow: 0 20px 50px rgba(16, 24, 40, 0.1);
-  transform: translateY(-1px);
+  transform: none;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: calc((var(--main-gap, 24px) / -2) - 1px);
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(0, 0, 0, 0.16) 12%,
+    rgba(0, 0, 0, 0.16) 88%,
+    transparent
+  );
+  pointer-events: none;
 }
 
 .heading {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 4px 4px;
 }
 
-.kicker {
-  margin: 0;
+.titleGroup {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titleIcon {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.74rem;
+  flex: 0 0 auto;
 }
 
 .title {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 1.16rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 58px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
+  min-width: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text-muted);
-  font-size: 0.86rem;
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
 .fileInput {
@@ -62,16 +91,16 @@
 }
 
 .dropzone {
-  min-height: 350px;
-  padding: 20px;
+  min-height: 142px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 8px;
+  gap: 7px;
   border: 1px dashed var(--border-strong);
-  background: var(--surface-soft);
+  background: transparent;
   border-radius: var(--radius-lg);
   color: var(--text);
   cursor: pointer;
@@ -81,11 +110,9 @@
     box-shadow 180ms ease;
 }
 
-.dropzone:hover:not(:disabled),
-.addButton:hover,
-.iconButton:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-1.5px);
+.dropzone:hover:not(:disabled) {
+  border-color: var(--primary);
+  transform: translateY(-1px);
 }
 
 .dropzone:disabled,
@@ -97,26 +124,43 @@
 
 .dropzoneDragging {
   border-color: var(--primary);
-  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.08);
+  background: var(--color-accent-drop);
+  box-shadow: inset 0 0 0 1px var(--color-scroll-track);
+}
+
+.dropzoneIcon {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  margin-bottom: 6px;
+  border: 0;
+  color: var(--primary);
+  box-shadow: none;
 }
 
 .dropzoneTitle {
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 800;
 }
 
 .dropzoneText {
   color: var(--text-muted);
+  font-size: 0.86rem;
 }
 
 .contentArea {
   min-height: 0;
-  flex: 1;
+  max-height: calc(100dvh - var(--header-offset) - 150px);
+  flex: 0 1 auto;
   position: relative;
+  padding: 2px 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
 }
 
 .scrollArea {
-  height: 100%;
+  max-height: inherit;
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
@@ -127,7 +171,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 3px;
 }
 
 .scrollArea::-webkit-scrollbar {
@@ -139,31 +183,53 @@
   top: 0;
   bottom: 0;
   left: -10px;
-  width: 2px;
+  width: 3px;
   border-radius: 999px;
-  background: rgba(216, 211, 202, 0.35);
+  background: transparent;
   pointer-events: none;
 }
 
 .customScrollbarThumb {
   width: 100%;
   border-radius: 999px;
-  background: rgba(109, 114, 111, 0.7);
+  background: rgba(0, 0, 0, 0.2);
   transition: transform 120ms ease;
 }
 
 .card {
   width: 100%;
-  min-height: 52px;
-  height: 52px;
+  min-height: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface-soft);
-  border-radius: var(--radius-lg);
-  padding: 0 14px;
+  gap: 10px;
+  background: transparent;
+  border-radius: var(--radius-md);
+  padding: 0 10px 0 12px;
+  flex: 0 0 auto;
+  box-shadow: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.card:hover {
+  background: var(--color-accent-subtle);
+  box-shadow: none;
+}
+
+.card:hover .iconButton {
+  background: transparent;
+}
+
+.cardIcon {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--text-muted);
   flex: 0 0 auto;
 }
 
@@ -174,8 +240,9 @@
 
 .cardTitle {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -189,20 +256,26 @@
 }
 
 .iconButton {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
   cursor: pointer;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
+    color 180ms ease,
     background-color 180ms ease;
+}
+
+.iconButton:hover {
+  border-color: transparent;
+  color: var(--primary);
 }
 
 .icon {
@@ -210,22 +283,47 @@
   height: 16px;
 }
 
+.actionButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .addButton {
   width: 100%;
-  min-height: 52px;
-  height: 52px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface-soft);
-  color: var(--text);
-  font-size: 1.8rem;
-  line-height: 1;
+  min-height: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
   cursor: pointer;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
+    box-shadow 180ms ease,
     background-color 180ms ease;
   flex: 0 0 auto;
+}
+
+.addButton svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.addButton:hover {
+  background: var(--color-accent-subtle);
+  box-shadow: none;
+  transform: translateY(-1px);
 }
 
 .overlay {
@@ -234,9 +332,10 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(245, 243, 239, 0.72);
+  background: var(--color-surface-soft);
   border-radius: inherit;
   animation: fadeIn 160ms ease;
+  backdrop-filter: blur(4px);
 }
 
 .overlayCard {
@@ -247,9 +346,13 @@
   min-width: min(100%, 320px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.08);
+  background: var(--color-surface-popover);
+  box-shadow: var(--shadow-elevated);
   text-align: center;
+}
+
+.overlayCard svg {
+  color: var(--primary);
 }
 
 .overlayCard strong {
@@ -272,10 +375,190 @@
 
 @media (max-width: 1280px) {
   .panel {
-    padding: 20px;
+    padding: 0;
   }
 
   .dropzone {
-    min-height: 300px;
+    min-height: 132px;
+  }
+}
+
+@media (max-width: 1199px) {
+  .dropzone {
+    min-height: 128px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .panel {
+    position: sticky;
+    top: 12px;
+    height: auto;
+    max-height: calc(100dvh - var(--header-offset) - 24px);
+    padding: 0;
+  }
+
+  .contentArea {
+    flex: 0 1 auto;
+    max-height: min(320px, 34dvh);
+  }
+
+  .scrollArea {
+    max-height: inherit;
+  }
+
+  .dropzone {
+    min-height: 118px;
+  }
+
+  .addButton {
+    min-height: 42px;
+    height: 42px;
+  }
+}
+
+@media (max-width: 767px) {
+  .panel {
+    padding: 0;
+    gap: 8px;
+  }
+
+  .heading {
+    min-height: 34px;
+  }
+
+  .dropzone {
+    min-height: 104px;
+    padding: 12px;
+  }
+
+  .dropzoneIcon {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 4px;
+  }
+
+  .dropzoneTitle {
+    font-size: 0.9rem;
+  }
+
+  .dropzoneText {
+    font-size: 0.82rem;
+  }
+
+  .card {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .iconButton {
+    width: 34px;
+    height: 34px;
+  }
+
+  .actionButtons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (orientation: portrait) and (max-width: 767px) {
+  .panel {
+    position: relative;
+    top: auto;
+    width: 100%;
+    max-height: none;
+  }
+
+  .panel::after {
+    display: none;
+  }
+
+  .contentArea {
+    max-height: 220px;
+  }
+
+  .dropzone {
+    min-height: 104px;
+  }
+
+  .addButton {
+    min-height: 42px;
+    height: 42px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .panel {
+    gap: 6px;
+  }
+
+  .heading {
+    min-height: 30px;
+    padding-bottom: 2px;
+  }
+
+  .title {
+    font-size: 1rem;
+  }
+
+  .count {
+    min-width: 38px;
+    font-size: 0.78rem;
+  }
+
+  .dropzone {
+    min-height: 76px;
+    padding: 10px;
+    gap: 5px;
+  }
+
+  .dropzoneIcon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 2px;
+  }
+
+  .dropzoneTitle {
+    font-size: 0.82rem;
+  }
+
+  .dropzoneText {
+    display: none;
+  }
+
+  .customScrollbar {
+    left: -7px;
+    width: 2px;
+  }
+
+  .card {
+    min-height: 36px;
+    height: 36px;
+    padding: 0 6px 0 8px;
+  }
+
+  .cardTitle {
+    font-size: 0.84rem;
+  }
+
+  .cardActions {
+    gap: 4px;
+  }
+
+  .iconButton {
+    width: 28px;
+    height: 28px;
+  }
+
+  .actionButtons {
+    gap: 6px;
+  }
+
+  .addButton {
+    min-height: 34px;
+    height: 34px;
+    gap: 5px;
+    font-size: 0.8rem;
   }
 }

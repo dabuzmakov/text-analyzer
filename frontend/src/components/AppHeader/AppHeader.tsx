@@ -1,3 +1,4 @@
+import { TextSearch } from 'lucide-react'
 import styles from './AppHeader.module.css'
 
 export function AppHeader() {
@@ -5,8 +6,13 @@ export function AppHeader() {
     <header className={styles.header}>
       <div className={styles.inner}>
         <div className={styles.badge}>
-          <span className={styles.dot} />
-          <span>Инструмент частотного анализа текстов</span>
+          <span className={styles.iconWrap}>
+            <TextSearch aria-hidden="true" size={18} strokeWidth={2} />
+          </span>
+          <span className={styles.brandText}>
+            <strong>Лексема</strong>
+            <span>Частотный анализ текстов</span>
+          </span>
         </div>
       </div>
     </header>

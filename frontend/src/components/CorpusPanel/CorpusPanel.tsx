@@ -1,5 +1,6 @@
 import type { ChangeEvent, DragEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { CloudUpload, FilePenLine, FilePlus, Files, Upload } from 'lucide-react'
 import type { UiDocument } from '../../shared/types'
 import { DocumentCard } from './DocumentCard'
 import styles from './CorpusPanel.module.css'
@@ -125,8 +126,10 @@ export function CorpusPanel({
       />
 
       <div className={styles.heading}>
-        <div>
-          <p className={styles.kicker}>Контент</p>
+        <div className={styles.titleGroup}>
+          <span className={styles.titleIcon}>
+            <Files aria-hidden="true" size={16} strokeWidth={1.9} />
+          </span>
           <h2 className={styles.title}>Документы</h2>
         </div>
         <span className={styles.count}>
@@ -141,6 +144,9 @@ export function CorpusPanel({
           type="button"
           onClick={openFilePicker}
         >
+          <span className={styles.dropzoneIcon}>
+            <CloudUpload aria-hidden="true" size={24} strokeWidth={1.9} />
+          </span>
           <span className={styles.dropzoneTitle}>Перетащите .txt файлы в эту область</span>
           <span className={styles.dropzoneText}>или нажмите для выбора</span>
         </button>
@@ -177,13 +183,33 @@ export function CorpusPanel({
         </div>
       )}
 
-      <button className={styles.addButton} type="button" onClick={onAddManual}>
-        +
-      </button>
+      <div className={styles.actionButtons}>
+        <button
+          aria-label="Загрузить документы из файла"
+          className={styles.addButton}
+          disabled={!canUpload}
+          type="button"
+          onClick={openFilePicker}
+        >
+          <Upload aria-hidden="true" size={18} strokeWidth={2.1} />
+          <span>Загрузить</span>
+        </button>
+
+        <button
+          aria-label="Создать документ вручную"
+          className={styles.addButton}
+          type="button"
+          onClick={onAddManual}
+        >
+          <FilePenLine aria-hidden="true" size={18} strokeWidth={1.9} />
+          <span>Создать</span>
+        </button>
+      </div>
 
       {isDragging ? (
         <div className={styles.overlay}>
           <div className={styles.overlayCard}>
+            <FilePlus aria-hidden="true" size={28} strokeWidth={1.8} />
             <strong>Отпустите, чтобы добавить файл</strong>
             <span>Поддерживается .txt формат</span>
           </div>
