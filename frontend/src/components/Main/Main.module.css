@@ -69,7 +69,7 @@
 @media (orientation: portrait) and (max-width: 767px) {
   .main {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(196px, 32dvh) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 12px;
     padding: 12px;
   }
