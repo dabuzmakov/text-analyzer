@@ -1,0 +1,64 @@
+.container {
+  position: fixed;
+  top: 78px;
+  right: 24px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.toast {
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-on-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.4;
+  box-shadow: var(--shadow-elevated);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.toast svg {
+  flex: 0 0 auto;
+}
+
+.success {
+  background: var(--color-toast-success);
+  border-color: var(--color-white-border);
+}
+
+.error {
+  background: var(--color-toast-error);
+  border-color: var(--color-white-border);
+}
+
+.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.hidden {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+@media (max-width: 767px) {
+  .container {
+    top: 68px;
+    right: 12px;
+    left: 12px;
+  }
+
+  .toast {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}

@@ -1,0 +1,182 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-backdrop-strong);
+  backdrop-filter: blur(6px);
+}
+
+.card {
+  width: min(100%, 720px);
+  background: var(--color-surface-modal);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-elevated);
+  padding: 22px;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.headingIcon {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-tint);
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.kicker {
+  margin: 0;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.16rem;
+  font-weight: 800;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.field input,
+.field textarea {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--text);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--color-focus);
+  outline: none;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 220px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lightButton,
+.darkButton {
+  border-radius: var(--radius-md);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.lightButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.darkButton {
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.lightButton:hover,
+.darkButton:hover {
+  transform: translateY(-1px);
+}
+
+.lightButton:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-control);
+}
+
+.darkButton:hover {
+  background: var(--color-primary-hover);
+}
+
+@media (max-width: 767px) {
+  .backdrop {
+    align-items: start;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  .card {
+    width: 100%;
+    padding: 16px;
+  }
+
+  .heading {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .headingIcon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .field textarea {
+    min-height: 180px;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .lightButton,
+  .darkButton {
+    width: 100%;
+    min-height: 42px;
+  }
+}
