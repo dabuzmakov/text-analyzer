@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react'
 import { downloadCsv, runAnalysis, saveCorpus } from '../api/client'
 import { APP_MESSAGES } from '../constants/messages'
-import type { AnalysisParams, AnalysisResponse, UiDocument } from '../types'
+import type {
+  AnalysisApiParams,
+  AnalysisParams,
+  AnalysisResponse,
+  ExportIdentifier,
+  UiDocument,
+} from '../types'
 import { toPositiveInteger } from '../utils/analysisParams'
 import { getDocumentDisplayName, toCsvFileName } from '../utils/documents'
 
@@ -11,7 +17,6 @@ type UseAnalyzerActionsParams = {
   documents: UiDocument[]
   onExportError: (message: string) => void
   onSaveError: (message: string) => void
-  onSaveSuccess: (message: string) => void
 }
 
 function getErrorMessage(error: unknown) {
@@ -28,7 +33,6 @@ export function useAnalyzerActions({
   documents,
   onExportError,
   onSaveError,
-  onSaveSuccess,
 }: UseAnalyzerActionsParams) {
   const [analysisError, setAnalysisError] = useState('')
   const [analysisResult, setAnalysisResult] =
@@ -39,6 +43,38 @@ export function useAnalyzerActions({
   const [isCorpusSaved, setIsCorpusSaved] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const saveRequestIdRef = useRef(0)
+
+  function getAnalysisApiParams(): AnalysisApiParams {
+    return {
+      top_n: toPositiveInteger(analysisParams.topN, 20),
+      min_word_length: toPositiveInteger(analysisParams.minWordLength, 3),
+      order_by: analysisParams.orderBy,
+    }
+  }
+
+  function getCorpusPayload() {
+    return documents.map((document) => ({
+      id: document.id,
+      content: document.content,
+    }))
+  }
+
+  function getPreferredExportFileName(identifier: ExportIdentifier) {
+    if (identifier === 'corpus') {
+      return 'statistics.csv'
+    }
+
+    const document = documents.find((item) => String(item.id) === identifier)
+    const fallbackDocument = {
+      id: Number(identifier),
+      title: '',
+      content: '',
+    }
+
+    return toCsvFileName(
+      getDocumentDisplayName(document ?? fallbackDocument, 0),
+    )
+  }
 
   function markCorpusAsChanged() {
     setIsCorpusSaved(false)
@@ -62,17 +98,13 @@ export function useAnalyzerActions({
     try {
       await saveCorpus({
         browser_id: browserId,
-        documents: documents.map((document) => ({
-          id: document.id,
-          content: document.content,
-        })),
+        documents: getCorpusPayload(),
       })
 
       if (saveRequestId === saveRequestIdRef.current) {
         setIsCorpusSaved(true)
         setHasUnsavedChanges(false)
         setHasSuccessfulAnalysis(false)
-        onSaveSuccess(APP_MESSAGES.saveSuccess)
       }
     } catch (error) {
       const message = getErrorMessage(error)
@@ -96,11 +128,7 @@ export function useAnalyzerActions({
     try {
       const result = await runAnalysis({
         browser_id: browserId,
-        params: {
-          top_n: toPositiveInteger(analysisParams.topN, 20),
-          min_word_length: toPositiveInteger(analysisParams.minWordLength, 3),
-          order_by: analysisParams.orderBy,
-        },
+        params: getAnalysisApiParams(),
       })
 
       setAnalysisResult(result.data)
@@ -114,24 +142,19 @@ export function useAnalyzerActions({
     }
   }
 
-  async function handleExport(identifiers: string[]) {
+  async function handleExport(identifiers: ExportIdentifier[]) {
     try {
-      for (const identifier of identifiers) {
-        const preferredFileName =
-          identifier === 'corpus'
-            ? 'statistics.csv'
-            : toCsvFileName(
-                getDocumentDisplayName(
-                  documents.find((document) => String(document.id) === identifier) ?? {
-                    id: Number(identifier),
-                    title: '',
-                    content: '',
-                  },
-                  0,
-                ),
-              )
+      const exportParams = {
+        browser_id: browserId,
+        ...getAnalysisApiParams(),
+      }
 
-        await downloadCsv(identifier, preferredFileName)
+      for (const identifier of identifiers) {
+        await downloadCsv(
+          identifier,
+          getPreferredExportFileName(identifier),
+          exportParams,
+        )
       }
     } catch {
       onExportError(APP_MESSAGES.downloadCsvError)
@@ -150,7 +173,6 @@ export function useAnalyzerActions({
     isAnalyzing,
     isCorpusSaved,
     isSaving,
-    markCorpusAsChanged,
     resetAnalysisState,
   }
 }

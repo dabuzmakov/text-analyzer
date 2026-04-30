@@ -1,6 +1,11 @@
 import { CorpusPanel } from '../CorpusPanel'
 import { Workspace } from '../Workspace'
-import type { AnalysisParams, AnalysisResponse, UiDocument } from '../../shared/types'
+import type {
+  AnalysisParams,
+  AnalysisResponse,
+  ExportIdentifier,
+  UiDocument,
+} from '../../shared/types'
 import styles from './Main.module.css'
 
 type MainProps = {
@@ -12,13 +17,12 @@ type MainProps = {
   canUpload: boolean
   documents: UiDocument[]
   isAnalyzing: boolean
-  isSaving: boolean
   maxDocuments: number
   onAddManual: () => void
   onAnalyze: () => void
   onChangeAnalysisParam: (field: keyof AnalysisParams, value: string) => void
   onEditDocument: (documentId: number) => void
-  onExport: (identifiers: string[]) => Promise<void>
+  onExport: (identifiers: ExportIdentifier[]) => Promise<void>
   onFilesAdded: (files: File[]) => void
   onRemoveDocument: (documentId: number) => void
 }
@@ -32,7 +36,6 @@ export function Main({
   canUpload,
   documents,
   isAnalyzing,
-  isSaving,
   maxDocuments,
   onAddManual,
   onAnalyze,
@@ -62,7 +65,6 @@ export function Main({
         canExport={canExport}
         documents={documents}
         isAnalyzing={isAnalyzing}
-        isSaving={isSaving}
         onAnalyze={onAnalyze}
         onChangeAnalysisParam={onChangeAnalysisParam}
         onExport={onExport}

@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Download, Play } from 'lucide-react'
 import { ExportModal } from '../ExportModal'
 import sharedButtonStyles from '../../shared/styles/buttonStyles.module.css'
-import type { AnalysisParams, UiDocument } from '../../shared/types'
+import type {
+  AnalysisParams,
+  ExportIdentifier,
+  UiDocument,
+} from '../../shared/types'
 import { normalizePositiveIntegerString } from '../../shared/utils/analysisParams'
 import styles from './FiltersPanel.module.css'
 
@@ -12,10 +16,9 @@ type FiltersPanelProps = {
   canExport: boolean
   documents: UiDocument[]
   isAnalyzing: boolean
-  isSaving: boolean
   onAnalyze: () => void
   onChange: (field: keyof AnalysisParams, value: string) => void
-  onExport: (identifiers: string[]) => Promise<void>
+  onExport: (identifiers: ExportIdentifier[]) => Promise<void>
 }
 
 const orderOptions = [
@@ -29,7 +32,6 @@ export function FiltersPanel({
   canExport,
   documents,
   isAnalyzing,
-  isSaving,
   onAnalyze,
   onChange,
   onExport,

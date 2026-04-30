@@ -99,7 +99,6 @@ export default function App() {
     documents,
     onExportError: (message) => showToast(message, 'error'),
     onSaveError: (message) => showToast(message, 'error'),
-    onSaveSuccess: () => undefined,
   })
 
   useEffect(() => {
@@ -311,7 +310,6 @@ export default function App() {
           canUpload={!isDocumentLimitReached}
           documents={documents}
           isAnalyzing={isAnalyzing}
-          isSaving={isSaving}
           maxDocuments={MAX_DOCUMENTS}
           onAddManual={openCreateModal}
           onAnalyze={handleAnalyze}

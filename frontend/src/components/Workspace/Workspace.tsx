@@ -1,6 +1,11 @@
 import { FiltersPanel } from '../FiltersPanel'
 import { ResultPanel } from '../ResultPanel'
-import type { AnalysisParams, AnalysisResponse, UiDocument } from '../../shared/types'
+import type {
+  AnalysisParams,
+  AnalysisResponse,
+  ExportIdentifier,
+  UiDocument,
+} from '../../shared/types'
 import styles from './Workspace.module.css'
 
 type WorkspaceProps = {
@@ -11,10 +16,9 @@ type WorkspaceProps = {
   canExport: boolean
   documents: UiDocument[]
   isAnalyzing: boolean
-  isSaving: boolean
   onAnalyze: () => void
   onChangeAnalysisParam: (field: keyof AnalysisParams, value: string) => void
-  onExport: (identifiers: string[]) => Promise<void>
+  onExport: (identifiers: ExportIdentifier[]) => Promise<void>
 }
 
 export function Workspace({
@@ -25,7 +29,6 @@ export function Workspace({
   canExport,
   documents,
   isAnalyzing,
-  isSaving,
   onAnalyze,
   onChangeAnalysisParam,
   onExport,
@@ -38,7 +41,6 @@ export function Workspace({
         canExport={canExport}
         documents={documents}
         isAnalyzing={isAnalyzing}
-        isSaving={isSaving}
         onAnalyze={onAnalyze}
         onChange={onChangeAnalysisParam}
         onExport={onExport}
