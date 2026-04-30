@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Download, FileSpreadsheet, Files, ListChecks } from 'lucide-react'
-import type { UiDocument } from '../../shared/types'
+import type { ExportIdentifier, UiDocument } from '../../shared/types'
 import sharedButtonStyles from '../../shared/styles/buttonStyles.module.css'
 import { getDocumentDisplayName } from '../../shared/utils/documents'
 import styles from './ExportModal.module.css'
@@ -12,7 +12,7 @@ type ExportModalProps = {
   isOpen: boolean
   documents: UiDocument[]
   onClose: () => void
-  onExport: (identifiers: string[]) => Promise<void>
+  onExport: (identifiers: ExportIdentifier[]) => Promise<void>
 }
 
 export function ExportModal({
@@ -179,8 +179,10 @@ export function ExportModal({
   async function handleExportSubmit() {
     const identifiers =
       exportMode === 'corpus'
-        ? ['corpus']
-        : selectedDocumentIds.map((documentId) => String(documentId))
+        ? (['corpus'] satisfies ExportIdentifier[])
+        : selectedDocumentIds.map(
+            (documentId) => String(documentId) as ExportIdentifier,
+          )
 
     if (identifiers.length === 0) {
       return

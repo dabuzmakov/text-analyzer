@@ -1,6 +1,9 @@
 import { APP_MESSAGES } from '../constants/messages'
 import type {
   AnalysisResponse,
+  CorpusApiDocument,
+  DownloadCsvParams,
+  ExportIdentifier,
   FrequencyRow,
   RunAnalysisRequest,
   SaveCorpusRequest,
@@ -12,6 +15,12 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 ).replace(/\/+$/, '')
 const MOCK_DELAY = 1000
+const MOCK_STORAGE_KEY = 'text-analyzer-mock-corpus'
+const DEFAULT_CORPUS_CSV_FILE_NAME = 'statistics.csv'
+const CSV_MEDIA_TYPE = 'text/csv;charset=utf-8'
+const MOCK_TOTAL_WORDS_PER_DOCUMENT = 420
+const MOCK_UNIQUE_WORDS = 830
+const MOCK_CSV_HEADER = '\ufeffСлово,Частота'
 
 type ApiEnvelope<T> = T & {
   status: string
@@ -24,112 +33,22 @@ type ApiErrorEnvelope = {
   status?: string
 }
 
-const MOCK_ANALYSIS_WORDS = [
-  'текст',
-  'данные',
-  'анализ',
-  'корпус',
-  'документ',
-  'частота',
-  'слово',
-  'таблица',
-  'результат',
-  'фильтр',
-  'загрузка',
-  'создание',
-  'экспорт',
-  'сохранение',
-  'интерфейс',
-  'панель',
-  'выборка',
-  'лексема',
-  'модуль',
-  'форма',
-  'кнопка',
-  'строка',
-  'колонка',
-  'параметр',
-  'значение',
-  'сортировка',
-  'минимум',
-  'максимум',
-  'подсчёт',
-  'отчёт',
-  'файл',
-  'проводник',
-  'редактор',
-  'сводка',
-  'метрика',
-  'частотность',
-  'токен',
-  'норма',
-  'поиск',
-  'проверка',
-  'адаптация',
-  'экран',
-  'монитор',
-  'планшет',
-  'телефон',
-  'прокрутка',
-  'заголовок',
-  'область',
-  'макет',
-  'контент',
-  'позиция',
-  'раздел',
-  'граница',
-  'отступ',
-  'радиус',
-  'фон',
-  'тень',
-  'состояние',
-  'ошибка',
-  'успех',
-  'запрос',
-  'ответ',
-  'сервер',
-  'клиент',
-  'массив',
-  'объект',
-  'счётчик',
-  'словарь',
-  'вывод',
-  'пример',
-  'тест',
-  'сценарий',
-  'разметка',
-  'компонент',
-  'приложение',
-  'проект',
-  'логика',
-  'наблюдение',
-  'контроль',
-  'итог',
+type MockCorpusStore = Record<string, CorpusApiDocument[]>
+
+const MOCK_ANALYSIS_ROWS: FrequencyRow[] = [
+  { word: 'текст', count: 54 },
+  { word: 'данные', count: 43 },
+  { word: 'анализ', count: 38 },
+  { word: 'корпус', count: 31 },
+  { word: 'документ', count: 29 },
+  { word: 'частота', count: 26 },
+  { word: 'слово', count: 24 },
+  { word: 'таблица', count: 21 },
+  { word: 'результат', count: 19 },
+  { word: 'фильтр', count: 17 },
+  { word: 'экспорт', count: 15 },
+  { word: 'сервер', count: 13 },
 ]
-
-const MOCK_ANALYSIS_TABLE: FrequencyRow[] = MOCK_ANALYSIS_WORDS.map((word, index) => ({
-  word,
-  count: Math.max(3, 96 - index),
-}))
-
-const MOCK_ANALYSIS_RESPONSE: AnalysisResponse = {
-  status: 'success',
-  data: {
-    summary: {
-      documents_count: 3,
-      total_words: 12840,
-      unique_words: MOCK_ANALYSIS_TABLE.length,
-    },
-    table: MOCK_ANALYSIS_TABLE,
-  },
-}
-
-const MOCK_CORPUS_CSV = [
-  'word,count',
-  'текст,54',
-  'данные,43',
-  'анализ,38',
-].join('\n')
 
 function wait(delay: number) {
   return new Promise((resolve) => window.setTimeout(resolve, delay))
@@ -147,12 +66,86 @@ function getApiBaseUrl() {
   return API_BASE_URL
 }
 
-function createMockCsvContent(identifier: string) {
-  if (identifier === 'corpus') {
-    return MOCK_CORPUS_CSV
+function getMockCorpusStore() {
+  const rawValue = window.localStorage.getItem(MOCK_STORAGE_KEY)
+
+  if (!rawValue) {
+    return {} as MockCorpusStore
   }
 
-  return ['word,count', `документ_${identifier},12`, 'пример,7'].join('\n')
+  try {
+    return JSON.parse(rawValue) as MockCorpusStore
+  } catch {
+    return {}
+  }
+}
+
+function setMockCorpusStore(store: MockCorpusStore) {
+  window.localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(store))
+}
+
+function getMockDocuments(browserId: string) {
+  return getMockCorpusStore()[browserId] ?? []
+}
+
+function getMockRows(orderBy: 'asc' | 'desc', topN?: number) {
+  const rows =
+    orderBy === 'asc' ? [...MOCK_ANALYSIS_ROWS].reverse() : [...MOCK_ANALYSIS_ROWS]
+
+  return typeof topN === 'number' ? rows.slice(0, topN) : rows
+}
+
+function buildAnalysisResponse(
+  documents: CorpusApiDocument[],
+  params: RunAnalysisRequest['params'],
+): AnalysisResponse {
+  return {
+    status: 'success',
+    data: {
+      summary: {
+        documents_count: documents.length,
+        total_words: documents.length * MOCK_TOTAL_WORDS_PER_DOCUMENT,
+        unique_words: MOCK_UNIQUE_WORDS,
+      },
+      table: getMockRows(params.order_by, params.top_n),
+    },
+  }
+}
+
+function buildCsvContent(identifier: ExportIdentifier, params: DownloadCsvParams) {
+  const rows = getMockRows(params.order_by, params.top_n)
+  const csvRows = rows.map((row) => `${row.word},${row.count}`).join('\n')
+
+  return `${MOCK_CSV_HEADER}${csvRows ? `\n${csvRows}` : ''}`
+}
+
+function assertMockCorpusExists(browserId: string) {
+  const documents = getMockDocuments(browserId)
+
+  if (documents.length === 0) {
+    throw new Error('Corpus is empty')
+  }
+
+  return documents
+}
+
+function assertMockExportTargetExists(
+  identifier: ExportIdentifier,
+  browserId: string,
+) {
+  const documents = getMockDocuments(browserId)
+
+  if (identifier === 'corpus') {
+    if (documents.length === 0) {
+      throw new Error('Corpus is empty or not found')
+    }
+
+    return
+  }
+
+  if (!documents.some((item) => String(item.id) === identifier)) {
+    throw new Error('Analysis result not found')
+  }
 }
 
 function triggerBlobDownload(blob: Blob, fileName: string) {
@@ -171,8 +164,14 @@ function triggerBlobDownload(blob: Blob, fileName: string) {
   }, 0)
 }
 
+function getDefaultCsvFileName(identifier: ExportIdentifier) {
+  return identifier === 'corpus'
+    ? DEFAULT_CORPUS_CSV_FILE_NAME
+    : `document-${identifier}.csv`
+}
+
 function getFileNameFromDisposition(
-  identifier: string,
+  identifier: ExportIdentifier,
   preferredFileName: string | undefined,
   contentDisposition: string | null,
 ) {
@@ -187,7 +186,7 @@ function getFileNameFromDisposition(
     return decodeURIComponent(rawFileName.replace(/"/g, ''))
   }
 
-  return identifier === 'corpus' ? 'statistics.csv' : `document-${identifier}.csv`
+  return getDefaultCsvFileName(identifier)
 }
 
 function getApiErrorMessage(payload: ApiErrorEnvelope | null, status: number) {
@@ -217,7 +216,25 @@ function getApiErrorMessage(payload: ApiErrorEnvelope | null, status: number) {
   return APP_MESSAGES.requestError(status)
 }
 
-async function request<T>(
+function createExportQuery(params?: DownloadCsvParams) {
+  if (!params) {
+    return ''
+  }
+
+  const searchParams = new URLSearchParams({
+    browser_id: params.browser_id,
+    min_word_length: String(params.min_word_length),
+    order_by: params.order_by,
+  })
+
+  if (typeof params.top_n === 'number') {
+    searchParams.set('top_n', String(params.top_n))
+  }
+
+  return `?${searchParams.toString()}`
+}
+
+async function requestJson<T>(
   path: string,
   method: 'POST' | 'PUT',
   payload: unknown,
@@ -251,49 +268,8 @@ async function request<T>(
   return parsed
 }
 
-export function saveCorpus(payload: SaveCorpusRequest) {
-  if (USE_MOCK_API) {
-    return wait(MOCK_DELAY).then(
-      () =>
-        ({
-          status: 'success',
-          message: `Saved ${payload.documents.length} documents`,
-        }) satisfies SaveCorpusResponse,
-    )
-  }
-
-  return request<SaveCorpusResponse>('/corpus', 'PUT', payload)
-}
-
-export function runAnalysis(payload: RunAnalysisRequest) {
-  if (USE_MOCK_API) {
-    return wait(MOCK_DELAY).then(() => MOCK_ANALYSIS_RESPONSE)
-  }
-
-  return request<AnalysisResponse>('/analysis/run', 'POST', payload)
-}
-
-export async function downloadCsv(identifier: string, preferredFileName?: string) {
-  if (USE_MOCK_API) {
-    await wait(300)
-
-    const content = createMockCsvContent(identifier)
-    const blob = new Blob([content], {
-      type: 'text/csv;charset=utf-8',
-    })
-
-    triggerBlobDownload(
-      blob,
-      preferredFileName ||
-        (identifier === 'corpus' ? 'statistics.csv' : `document-${identifier}.csv`),
-    )
-
-    return
-  }
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/export/csv/${encodeURIComponent(identifier)}`,
-  )
+async function requestFile(path: string) {
+  const response = await fetch(`${getApiBaseUrl()}${path}`)
 
   if (!response.ok) {
     let payload: ApiErrorEnvelope | null = null
@@ -307,6 +283,65 @@ export async function downloadCsv(identifier: string, preferredFileName?: string
     throw new Error(getApiErrorMessage(payload, response.status))
   }
 
+  return response
+}
+
+export function saveCorpus(payload: SaveCorpusRequest) {
+  if (USE_MOCK_API) {
+    return wait(MOCK_DELAY).then(() => {
+      const store = getMockCorpusStore()
+
+      store[payload.browser_id] = payload.documents
+      setMockCorpusStore(store)
+
+      return {
+        status: 'success',
+        message: `Saved ${payload.documents.length} documents`,
+      } satisfies SaveCorpusResponse
+    })
+  }
+
+  return requestJson<SaveCorpusResponse>('/corpus', 'PUT', payload)
+}
+
+export function runAnalysis(payload: RunAnalysisRequest) {
+  if (USE_MOCK_API) {
+    return wait(MOCK_DELAY).then(() =>
+      buildAnalysisResponse(
+        assertMockCorpusExists(payload.browser_id),
+        payload.params,
+      ),
+    )
+  }
+
+  return requestJson<AnalysisResponse>('/analysis/run', 'POST', payload)
+}
+
+export async function downloadCsv(
+  identifier: ExportIdentifier,
+  preferredFileName?: string,
+  params?: DownloadCsvParams,
+) {
+  if (USE_MOCK_API) {
+    await wait(300)
+
+    if (!params) {
+      throw new Error(APP_MESSAGES.invalidServerResponse)
+    }
+
+    assertMockExportTargetExists(identifier, params.browser_id)
+
+    const blob = new Blob([buildCsvContent(identifier, params)], {
+      type: CSV_MEDIA_TYPE,
+    })
+
+    triggerBlobDownload(blob, preferredFileName || getDefaultCsvFileName(identifier))
+    return
+  }
+
+  const response = await requestFile(
+    `/export/csv/${encodeURIComponent(identifier)}${createExportQuery(params)}`,
+  )
   const blob = await response.blob()
   const fileName = getFileNameFromDisposition(
     identifier,

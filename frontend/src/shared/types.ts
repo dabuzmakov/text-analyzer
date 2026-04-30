@@ -38,6 +38,15 @@ export type RunAnalysisRequest = {
   params: AnalysisApiParams
 }
 
+export type DownloadCsvParams = {
+  browser_id: string
+  min_word_length: number
+  order_by: AnalysisOrder
+  top_n?: number
+}
+
+export type ExportIdentifier = 'corpus' | `${number}`
+
 export type AnalysisSummary = {
   documents_count: number
   total_words: number
