@@ -31,7 +31,7 @@ jobs:
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           source: "backend,frontend,database,scripts,deploy,README.md"
           target: "~/text-analyzer"
@@ -42,19 +42,25 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
           UNI_POSTGRES_PASSWORD: ${{ secrets.UNI_POSTGRES_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           script_stop: true
-          envs: SERVER_IP,UNI_POSTGRES_PASSWORD
+          envs: SERVER_IP,SERVER_PASSWORD,UNI_POSTGRES_PASSWORD
           script: |
             set -euo pipefail
 
             if [ -z "${SERVER_IP:-}" ]; then
               echo "SERVER_IP secret is required"
+              exit 1
+            fi
+
+            if [ -z "${SERVER_PASSWORD:-}" ]; then
+              echo "SERVER_PASSWORD secret is required"
               exit 1
             fi
 
