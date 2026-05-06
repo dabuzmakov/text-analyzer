@@ -1,0 +1,92 @@
+name: Deploy University Server
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - backend/**
+      - frontend/**
+      - database/**
+      - scripts/db/**
+      - deploy/university/**
+      - .github/workflows/deploy-university.yml
+
+concurrency:
+  group: deploy-university-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to University Server
+    runs-on: ubuntu-latest
+    environment: university-production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Upload files to university server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "backend,frontend,database,scripts,deploy,README.md"
+          target: "~/text-analyzer"
+          overwrite: true
+          rm: false
+
+      - name: Run deploy commands on university server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          UNI_POSTGRES_PASSWORD: ${{ secrets.UNI_POSTGRES_PASSWORD }}
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          envs: SERVER_IP,UNI_POSTGRES_PASSWORD
+          script: |
+            set -euo pipefail
+
+            if [ -z "${SERVER_IP:-}" ]; then
+              echo "SERVER_IP secret is required"
+              exit 1
+            fi
+
+            if [ -z "${UNI_POSTGRES_PASSWORD:-}" ]; then
+              echo "UNI_POSTGRES_PASSWORD secret is required"
+              exit 1
+            fi
+
+            APP_DIR="$HOME/text-analyzer"
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+
+            DOMAIN_VALUE="http://${SERVER_IP}"
+            PUBLIC_API_VALUE="http://${SERVER_IP}/api"
+            CORS_VALUE="http://${SERVER_IP}"
+            DB_NAME_VALUE="text_analyzer_prod"
+            DB_USER_VALUE="text_analyzer_prod"
+            DB_PASSWORD_VALUE="${UNI_POSTGRES_PASSWORD}"
+            ACME_EMAIL_VALUE="devops@example.com"
+
+            {
+              echo "DOMAIN_NAME=${DOMAIN_VALUE}"
+              echo "ACME_EMAIL=${ACME_EMAIL_VALUE}"
+              echo "PUBLIC_API_BASE_URL=${PUBLIC_API_VALUE}"
+              echo "CORS_ALLOWED_ORIGINS=${CORS_VALUE}"
+              echo "POSTGRES_DB=${DB_NAME_VALUE}"
+              echo "POSTGRES_USER=${DB_USER_VALUE}"
+              echo "POSTGRES_PASSWORD=${DB_PASSWORD_VALUE}"
+            } > deploy/university/.env.university
+
+            docker compose -f deploy/university/docker-compose.university.yml --env-file deploy/university/.env.university build --pull
+            docker compose -f deploy/university/docker-compose.university.yml --env-file deploy/university/.env.university up -d postgres
+            docker compose -f deploy/university/docker-compose.university.yml --env-file deploy/university/.env.university run --rm db-migrate
+            docker compose -f deploy/university/docker-compose.university.yml --env-file deploy/university/.env.university up -d --remove-orphans
+            docker compose -f deploy/university/docker-compose.university.yml --env-file deploy/university/.env.university ps
