@@ -1,0 +1,1 @@
+export { DocumentsPagination } from './DocumentsPagination'

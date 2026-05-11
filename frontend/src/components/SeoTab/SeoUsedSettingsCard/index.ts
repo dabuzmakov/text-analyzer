@@ -1,0 +1,1 @@
+export { SeoUsedSettingsCard } from './SeoUsedSettingsCard'

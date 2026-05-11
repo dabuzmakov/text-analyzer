@@ -1,0 +1,1 @@
+export { SeoReport } from './SeoReport'

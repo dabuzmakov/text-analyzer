@@ -1,334 +1,162 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
-import { AppHeader } from './components/AppHeader'
-import { Main } from './components/Main'
-import { ManualDocumentModal } from './components/ManualDocumentModal'
-import { Toast } from './components/Toast'
-import appStyles from './App.module.css'
-import { APP_MESSAGES } from './shared/constants/messages'
-import { useAnalyzerActions } from './shared/hooks/useAnalyzerActions'
-import type {
-  AnalysisParams,
-  ManualForm,
-} from './shared/types'
-import type { UiDocument } from './shared/types'
-import { getOrCreateBrowserId } from './shared/utils/browser'
-import { sanitizePositiveIntegerInput } from './shared/utils/analysisParams'
-import { createUiDocument } from './shared/utils/documents'
-import { readTextFile } from './shared/utils/files'
-
-const MAX_DOCUMENTS = 30
-const ANALYSIS_PARAMS_STORAGE_KEY = 'text-analyzer-analysis-params'
-
-const defaultParams: AnalysisParams = {
-  topN: '20',
-  minWordLength: '3',
-  orderBy: 'desc',
-}
-
-const emptyManualForm: ManualForm = {
-  title: '',
-  content: '',
-}
-
-const TOAST_DURATION = 1000
-const TOAST_EXIT_DURATION = 220
-
-type ToastState = {
-  id: number
-  type: 'success' | 'error'
-  message: string
-}
-
-function normalizeAnalysisParams(
-  candidate: Partial<AnalysisParams> | null | undefined,
-): AnalysisParams {
-  return {
-    topN: sanitizePositiveIntegerInput(candidate?.topN, defaultParams.topN),
-    minWordLength: sanitizePositiveIntegerInput(
-      candidate?.minWordLength,
-      defaultParams.minWordLength,
-    ),
-    orderBy:
-      candidate?.orderBy === 'asc' || candidate?.orderBy === 'desc'
-        ? candidate.orderBy
-        : defaultParams.orderBy,
-  }
-}
-
-function loadStoredParams() {
-  const storedParams = localStorage.getItem(ANALYSIS_PARAMS_STORAGE_KEY)
-
-  if (!storedParams) {
-    return defaultParams
-  }
-
-  try {
-    return normalizeAnalysisParams(JSON.parse(storedParams) as Partial<AnalysisParams>)
-  } catch {
-    return defaultParams
-  }
-}
+import { Check, Languages, Scale } from 'lucide-react'
+import styles from './App.module.css'
+import { DocumentModal } from './components/DocumentModal'
+import { DocumentsTab } from './components/DocumentsTab'
+import { LogoMark } from './components/LogoMark'
+import { PlaceholderTab } from './components/PlaceholderTab'
+import { SeoTab } from './components/SeoTab'
+import { SettingsTab } from './components/SettingsTab'
+import { Sidebar } from './components/Sidebar'
+import { splitTextarea } from './shared/utils/lexema'
+import { useLexemaApp } from './hooks/useLexemaApp'
 
 export default function App() {
-  const [browserId] = useState(getOrCreateBrowserId)
-  const [documents, setDocuments] = useState<UiDocument[]>([])
-  const [analysisParams, setAnalysisParams] = useState(loadStoredParams)
-  const [manualForm, setManualForm] = useState(emptyManualForm)
-  const [isManualModalOpen, setIsManualModalOpen] = useState(false)
-  const [editingDocumentId, setEditingDocumentId] = useState<number | null>(null)
-  const [nextDocumentId, setNextDocumentId] = useState(1)
-  const [toast, setToast] = useState<ToastState | null>(null)
-  const [isToastVisible, setIsToastVisible] = useState(false)
-  const didMountDocumentsRef = useRef(false)
+  const app = useLexemaApp()
 
-  const {
-    analysisError,
-    analysisResult,
-    handleAnalyze,
-    handleExport,
-    handleSaveCorpus,
-    hasSuccessfulAnalysis,
-    hasUnsavedChanges,
-    isAnalyzing,
-    isCorpusSaved,
-    isSaving,
-    resetAnalysisState,
-  } = useAnalyzerActions({
-    analysisParams,
-    browserId,
-    documents,
-    onExportError: (message) => showToast(message, 'error'),
-    onSaveError: (message) => showToast(message, 'error'),
-  })
-
-  useEffect(() => {
-    localStorage.setItem(ANALYSIS_PARAMS_STORAGE_KEY, JSON.stringify(analysisParams))
-  }, [analysisParams])
-
-  useEffect(() => {
-    if (!didMountDocumentsRef.current) {
-      didMountDocumentsRef.current = true
-      return
-    }
-
-    const saveTimer = window.setTimeout(() => {
-      void handleSaveCorpus()
-    }, 250)
-
-    return () => {
-      window.clearTimeout(saveTimer)
-    }
-  }, [documents])
-
-  useEffect(() => {
-    let hideTimer = 0
-    let removeTimer = 0
-
-    if (toast) {
-      setIsToastVisible(true)
-      hideTimer = window.setTimeout(() => {
-        setIsToastVisible(false)
-      }, TOAST_DURATION)
-      removeTimer = window.setTimeout(() => {
-        setToast(null)
-      }, TOAST_DURATION + TOAST_EXIT_DURATION)
-    }
-
-    return () => {
-      window.clearTimeout(hideTimer)
-      window.clearTimeout(removeTimer)
-    }
-  }, [toast])
-
-  const isDocumentLimitReached = documents.length >= MAX_DOCUMENTS
-  const isEditingDocument = editingDocumentId !== null
-  const canAnalyze =
-    documents.length > 0 &&
-    isCorpusSaved &&
-    !hasUnsavedChanges &&
-    !isSaving &&
-    !isAnalyzing
-  const canExport =
-    hasSuccessfulAnalysis &&
-    analysisResult !== null &&
-    isCorpusSaved &&
-    !hasUnsavedChanges &&
-    documents.length > 0
-
-  function showToast(message: string, type: ToastState['type']) {
-    setToast({
-      id: Date.now(),
-      type,
-      message,
-    })
-  }
-
-  function updateDocuments(nextDocuments: UiDocument[]) {
-    setDocuments(nextDocuments)
-    resetAnalysisState()
-  }
-
-  function resetManualForm() {
-    setManualForm(emptyManualForm)
-  }
-
-  function closeManualModal() {
-    setIsManualModalOpen(false)
-    setEditingDocumentId(null)
-    resetManualForm()
-  }
-
-  function openCreateModal() {
-    setEditingDocumentId(null)
-    resetManualForm()
-    setIsManualModalOpen(true)
-  }
-
-  function updateManualForm(field: keyof ManualForm, value: string) {
-    setManualForm({
-      ...manualForm,
-      [field]: value,
-    })
-  }
-
-  function updateAnalysisParam(field: keyof AnalysisParams, value: string) {
-    setAnalysisParams((current) => {
-      if (field === 'topN' || field === 'minWordLength') {
-        return {
-          ...current,
-          [field]: sanitizePositiveIntegerInput(value, current[field]),
-        }
-      }
-
-      return {
-        ...current,
-        orderBy: value as AnalysisParams['orderBy'],
-      }
-    })
-  }
-
-  async function handleFilesAdded(files: File[]) {
-    if (files.length === 0) {
-      return
-    }
-
-    const freeSlots = MAX_DOCUMENTS - documents.length
-    const selectedFiles = files.slice(0, freeSlots)
-    const startingDocumentId = nextDocumentId
-
-    setNextDocumentId((current) => current + selectedFiles.length)
-
-    try {
-      const newDocuments = await Promise.all(
-        selectedFiles.map(async (file, index) => {
-          const content = await readTextFile(file)
-
-          return createUiDocument(
-            startingDocumentId + index,
-            file.name.replace(/\.txt$/i, '') || file.name,
-            content,
-          )
-        }),
-      )
-
-      updateDocuments([...documents, ...newDocuments])
-    } catch (error) {
-      showToast(APP_MESSAGES.unexpectedError, 'error')
-    }
-  }
-
-  function handleRemoveDocument(documentId: number) {
-    updateDocuments(documents.filter((document) => document.id !== documentId))
-  }
-
-  function handleEditDocument(documentId: number) {
-    const documentToEdit = documents.find((document) => document.id === documentId)
-
-    if (!documentToEdit) {
-      return
-    }
-
-    setManualForm({
-      title: documentToEdit.title,
-      content: documentToEdit.content,
-    })
-    setEditingDocumentId(documentId)
-    setIsManualModalOpen(true)
-  }
-
-  function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (isDocumentLimitReached && !isEditingDocument) {
-      return
-    }
-
-    const title = manualForm.title.trim()
-    const content = manualForm.content.trim()
-
-    if (!title || !content) {
-      return
-    }
-
-    if (isEditingDocument) {
-      updateDocuments(
-        documents.map((document) =>
-          document.id === editingDocumentId
-            ? { ...document, title, content }
-            : document,
-        ),
-      )
-    } else {
-      const documentId = nextDocumentId
-      setNextDocumentId((current) => current + 1)
-      updateDocuments([...documents, createUiDocument(documentId, title, content)])
-    }
-
-    closeManualModal()
+  if (app.isAppLoading) {
+    return (
+      <div className={styles.loadingScreen}>
+        <div className={styles.logoMark}>
+          <LogoMark />
+        </div>
+        <p>Загружаем Лексему...</p>
+      </div>
+    )
   }
 
   return (
-    <>
-      <div className={appStyles.app}>
-        {toast ? (
-          <Toast
-            key={toast.id}
-            isVisible={isToastVisible}
-            message={toast.message}
-            type={toast.type}
-          />
-        ) : null}
+    <div className={styles.shell}>
+      <input
+        ref={app.fileInputRef}
+        className={styles.hiddenInput}
+        type="file"
+        accept=".txt,text/plain"
+        multiple
+        onChange={app.handleFileInput}
+      />
 
-        <AppHeader />
+      {app.message ? (
+        <div className={`${styles.toast} ${app.message.variant === 'copy' ? styles.copyFeedback : ''}`} role="status">
+          {app.message.variant === 'copy' ? <Check size={15} /> : null}
+          <span>{app.message.text}</span>
+        </div>
+      ) : null}
 
-        <Main
-          analysisError={analysisError}
-          analysisParams={analysisParams}
-          analysisResult={analysisResult}
-          canAnalyze={canAnalyze}
-          canExport={canExport}
-          canUpload={!isDocumentLimitReached}
-          documents={documents}
-          isAnalyzing={isAnalyzing}
-          maxDocuments={MAX_DOCUMENTS}
-          onAddManual={openCreateModal}
-          onAnalyze={handleAnalyze}
-          onChangeAnalysisParam={updateAnalysisParam}
-          onEditDocument={handleEditDocument}
-          onExport={handleExport}
-          onFilesAdded={handleFilesAdded}
-          onRemoveDocument={handleRemoveDocument}
-        />
+      <Sidebar
+        activeTab={app.activeTab}
+        canUpload={app.canUpload}
+        documentCount={app.documents.length}
+        onOpenFilePicker={app.openFilePicker}
+        onSetActiveTab={app.setActiveTab}
+        onUploadFiles={app.handleFiles}
+      />
+
+      <div className={styles.workspace}>
+        <main className={styles.content}>
+          {app.activeTab === 'seo' ? (
+            <SeoTab
+              documents={app.documents}
+              isAnalyzing={app.isAnalyzing}
+              isExporting={app.isExporting}
+              onAnalyze={app.handleRunSeoAnalysis}
+              onCopyKeywordsMarkdown={app.copyKeywordsMarkdown}
+              onCopyNgramsMarkdown={app.copyNgramsMarkdown}
+              onCopyWordsMarkdown={app.copyWordsMarkdown}
+              onCsvExport={app.handleCsvExport}
+              onOpenFilePicker={app.openFilePicker}
+              onOpenSettings={() => app.setActiveTab('settings')}
+              onSelectAll={() => app.setSelectedSeoDocumentIds(app.documents.map((document) => document.id))}
+              onSelectNone={() => app.setSelectedSeoDocumentIds([])}
+              onToggleDocument={app.toggleSeoDocument}
+              selectedDocumentIds={app.selectedSeoDocumentIds}
+              selectedDocuments={app.selectedSeoDocuments}
+              seoResult={app.seoResult}
+              settings={app.settings}
+            />
+          ) : null}
+
+          {app.activeTab === 'documents' ? (
+            <DocumentsTab
+              canUpload={app.canUpload}
+              corpusSummary={app.corpusSummary}
+              documentSearch={app.documentSearch}
+              documents={app.documents}
+              filteredDocuments={app.filteredDocuments}
+              isSaving={app.isDocumentSaving}
+              onCreate={app.openCreateDocumentModal}
+              onDelete={app.handleDeleteDocument}
+              onDeleteSelected={app.handleDeleteSelectedDocuments}
+              onEdit={app.openEditDocumentModal}
+              onOpenFilePicker={app.openFilePicker}
+              onSearch={app.setDocumentSearch}
+              onSelect={app.toggleDocumentSelection}
+              onSelectAll={(checked) =>
+                app.setSelectedDocumentIds(checked ? app.filteredDocuments.map((document) => document.id) : [])
+              }
+              onUploadFiles={app.handleFiles}
+              selectedDocumentIds={app.selectedDocumentIds}
+            />
+          ) : null}
+
+          {app.activeTab === 'settings' ? (
+            <SettingsTab
+              draft={app.settingsDraft}
+              isSaving={app.isSettingsSaving}
+              onReset={app.resetSettingsDraft}
+              onSave={app.handleSaveSettings}
+              onSetKeywords={(value) =>
+                app.updateSettingsDraft({
+                  keywords: splitTextarea(value),
+                })
+              }
+              onSetLemmatization={(value) => app.updateSettingsDraft({ lemmatization: value })}
+              onSetSpamThreshold={(value) =>
+                app.updateSettingsDraft({
+                  spam: {
+                    threshold_percent: value,
+                  },
+                })
+              }
+              onSetStopWords={(value) =>
+                app.updateSettingsDraft({
+                  stop_words: {
+                    ...app.settingsDraft.stop_words,
+                    custom: splitTextarea(value),
+                  },
+                })
+              }
+              onSetStopWordsMode={app.setStopWordsMode}
+              onToggleNgramSize={app.toggleNgramSize}
+            />
+          ) : null}
+
+          {app.activeTab === 'compare' ? (
+            <PlaceholderTab
+              icon={<Scale size={30} />}
+              title="Сравнительный анализ"
+              text="Здесь можно будет сравнивать два документа по ключевым словам, плотности и тематическим фразам."
+            />
+          ) : null}
+
+          {app.activeTab === 'spelling' ? (
+            <PlaceholderTab
+              icon={<Languages size={30} />}
+              title="Проверить орфографию"
+              text="Здесь появится проверка орфографии, грамматики и стилистики текста."
+            />
+          ) : null}
+        </main>
       </div>
 
-      <ManualDocumentModal
-        form={manualForm}
-        isEditing={isEditingDocument}
-        isOpen={isManualModalOpen}
-        onChange={updateManualForm}
-        onClose={closeManualModal}
-        onSubmit={handleManualSubmit}
-      />
-    </>
+      {app.modal ? (
+        <DocumentModal
+          isSaving={app.isDocumentSaving}
+          modal={app.modal}
+          onChange={app.setModal}
+          onClose={() => app.setModal(null)}
+          onSubmit={app.handleDocumentSubmit}
+        />
+      ) : null}
+    </div>
   )
 }
