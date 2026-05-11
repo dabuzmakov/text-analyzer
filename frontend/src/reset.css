@@ -1,4 +1,4 @@
-*,
+﻿*,
 *::before,
 *::after {
   box-sizing: border-box;
@@ -60,3 +60,4 @@ select {
 button {
   background: none;
 }
+

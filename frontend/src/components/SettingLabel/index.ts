@@ -1,0 +1,1 @@
+export { SettingLabel } from './SettingLabel'

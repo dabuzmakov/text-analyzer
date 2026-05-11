@@ -1,0 +1,2 @@
+export const CUSTOM_SCROLLBAR_INSET = 8
+export const PNG_EXPORT_ROW_LIMIT = 24

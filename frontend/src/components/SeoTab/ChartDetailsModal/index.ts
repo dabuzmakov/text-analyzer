@@ -1,0 +1,1 @@
+export { ChartDetailsModal } from './ChartDetailsModal'
