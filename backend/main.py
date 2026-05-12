@@ -1,263 +1,416 @@
-import os
-import re
-import csv
 import io
-import asyncpg
-from contextlib import asynccontextmanager
-from collections import Counter
-from typing import List, Optional, Literal
+import json
+import uuid
+import zipfile
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Literal
+
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from fastapi.responses import StreamingResponse
 
-load_dotenv()  # загружает переменные из .env
+from config import CORS_ALLOW_ORIGINS, DATABASE_URL, MAX_DOCUMENTS, SEO_ANALYSIS_TYPE
+from database import lifespan, require_pool
+from repositories import (
+    document_to_dict,
+    fetch_documents,
+    fetch_selected_documents,
+    get_client_id,
+    get_latest_result,
+    get_saved_seo_or_404,
+    get_settings_record,
+    invalidate_analysis,
+    save_settings_record,
+    settings_to_dict,
+)
+from schemas import (
+    AnalysisSettings,
+    BulkDocumentItem,
+    BulkDocumentsRequest,
+    DocumentCreateRequest,
+    DocumentPatchRequest,
+    LegacyAnalysisRequest,
+    LegacyCorpusRequest,
+    SeoAnalysisRequest,
+    SettingsRequest,
+)
+from services.export import csv_bytes, csv_response, seo_table_to_csv
+from services.seo_analysis import build_seo_result
+from services.text_utils import count_words
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is not set")
 
-# Глобальная переменная для пула соединений БД
-pool: Optional[asyncpg.Pool] = None
+app = FastAPI(title="Лексема API", lifespan=lifespan)
 
-
-# ==========================================
-# Жизненный цикл приложения (Lifespan)
-# ==========================================
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global pool
-    # Создаем пул соединений при старте
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=10)
-    yield
-    # Закрываем пул при завершении приложения
-    if pool is not None:
-        await pool.close()
-
-
-app = FastAPI(title="Text Frequency Analysis API", lifespan=lifespan)
-
-origins = ["https://text-analyzer-frontend-ra8y.onrender.com"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ==========================================
-# Модели
-# ==========================================
+def missing_document_ids(requested_ids: List[str], documents: List[Dict[str, Any]]) -> List[str]:
+    if not requested_ids:
+        return []
 
-class DocumentModel(BaseModel):
-    id: int
-    content: str
-
-
-class PutCorpusRequest(BaseModel):
-    browser_id: str
-    documents: List[DocumentModel] = Field(..., max_length=30)
-
-
-class PostAnalysisRequest(BaseModel):
-    browser_id: str
-    params: dict = Field(default={"top_n": 20, "min_word_length": 1, "order_by": "desc"})
+    available_ids = {
+        str(value)
+        for document in documents
+        for value in (document.get("id"), document.get("client_document_id"), document.get("database_id"))
+        if value is not None
+    }
+    normalized_requested_ids = list(dict.fromkeys(document_id.strip() for document_id in requested_ids if document_id.strip()))
+    return [document_id for document_id in normalized_requested_ids if document_id not in available_ids]
 
 
-# ==========================================
-# Вспомогательные функции (Текст)
-# ==========================================
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "service": "lexema-api",
+        "db_configured": bool(DATABASE_URL),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
-def extract_words_from_text(text: str, min_length: int) -> List[str]:
-    text = text.lower()
-    text = re.sub(r'[^а-яёa-z\'\s]', ' ', text)
-    words = re.findall(r"[а-яёa-z]+(?:'[а-яёa-z]+)*", text)
-    return [word for word in words if len(word) >= min_length]
+
+@app.get("/app/state")
+async def get_app_state(browser_id: str = Query(..., min_length=1)):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        settings = settings_to_dict(await get_settings_record(conn, client_id))
+        documents = await fetch_documents(conn, client_id)
+        seo = await get_latest_result(conn, client_id, SEO_ANALYSIS_TYPE)
+        return {
+            "status": "success",
+            "data": {
+                "documents": documents,
+                "settings": settings,
+                "last_results": {
+                    "seo": seo,
+                    "compare": None,
+                    "spelling": None,
+                },
+            },
+        }
 
 
-# ==========================================
-# Вспомогательные функции (База данных)
-# ==========================================
+@app.get("/documents")
+async def get_documents(browser_id: str = Query(..., min_length=1)):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        return {"status": "success", "data": await fetch_documents(conn, client_id)}
 
-async def get_client_id(browser_id: str) -> int:
-    """Получает client_id по browser_id. Если нет — создает нового клиента."""
-    # Защита от обращения к неинициализированному пулу
-    if pool is None:
-        raise HTTPException(status_code=503, detail="Database not initialized")
 
-    async with pool.acquire() as conn:
-        # Проверяем, существует ли клиент
-        client_id = await conn.fetchval(
-            "SELECT id FROM app_clients WHERE browser_id = $1", browser_id
+@app.post("/documents")
+async def create_document(request_data: DocumentCreateRequest):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, request_data.browser_id)
+        existing_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM documents WHERE client_id = $1",
+            client_id,
         )
-        if not client_id:
-            # Создаем нового клиента
-            client_id = await conn.fetchval(
-                "INSERT INTO app_clients (browser_id) VALUES ($1) RETURNING id", browser_id
+        if int(existing_count) >= MAX_DOCUMENTS:
+            raise HTTPException(status_code=400, detail="DOCUMENT_LIMIT_REACHED")
+
+        client_document_id = request_data.client_document_id or str(uuid.uuid4())
+        row = await conn.fetchrow(
+            """
+            INSERT INTO documents (
+                client_id,
+                client_document_id,
+                title,
+                content,
+                char_count,
+                raw_word_count,
+                updated_at
             )
-        return client_id
-
-
-async def get_all_document_contents(client_id: int) -> List[str]:
-    """Получает содержимое всех документов клиента."""
-    if pool is None:
-        raise HTTPException(status_code=503, detail="Database not initialized")
-
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT content FROM documents WHERE client_id = $1", client_id
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            RETURNING id, client_document_id, title, content, char_count, raw_word_count, created_at, updated_at
+            """,
+            client_id,
+            client_document_id,
+            request_data.title,
+            request_data.content,
+            len(request_data.content),
+            count_words(request_data.content),
         )
-        return [row["content"] for row in rows]
+        await invalidate_analysis(conn, client_id, "Документы изменены")
+        return {"status": "success", "data": document_to_dict(row)}
 
 
-async def get_document_content_by_client_doc_id(client_id: int, client_doc_id: str) -> Optional[str]:
-    """Получает содержимое одного документа клиента по его ID из фронтенда."""
-    if pool is None:
-        raise HTTPException(status_code=503, detail="Database not initialized")
+@app.put("/documents")
+async def replace_documents(request_data: BulkDocumentsRequest):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, request_data.browser_id)
+        async with conn.transaction():
+            await conn.execute("DELETE FROM documents WHERE client_id = $1", client_id)
+            for index, document in enumerate(request_data.documents, start=1):
+                client_document_id = str(document.client_document_id or document.id or uuid.uuid4())
+                title = document.title or f"document_{index}"
+                content = document.content
+                await conn.execute(
+                    """
+                    INSERT INTO documents (
+                        client_id,
+                        client_document_id,
+                        title,
+                        content,
+                        char_count,
+                        raw_word_count,
+                        updated_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    """,
+                    client_id,
+                    client_document_id,
+                    title,
+                    content,
+                    len(content),
+                    count_words(content),
+                )
+            await invalidate_analysis(conn, client_id, "Документы изменены")
+            return {"status": "success", "data": await fetch_documents(conn, client_id)}
 
-    async with pool.acquire() as conn:
-        return await conn.fetchval(
-            "SELECT content FROM documents WHERE client_id = $1 AND client_document_id = $2",
-            client_id, client_doc_id
+
+@app.patch("/documents/{document_id}")
+async def update_document(document_id: str, request_data: DocumentPatchRequest):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, request_data.browser_id)
+        existing = await conn.fetchrow(
+            """
+            SELECT id, title, content
+            FROM documents
+            WHERE client_id = $1 AND (client_document_id = $2 OR id::text = $2)
+            """,
+            client_id,
+            document_id,
         )
+        if existing is None:
+            raise HTTPException(status_code=404, detail="DOCUMENT_NOT_FOUND")
+
+        title = request_data.title if request_data.title is not None else existing["title"]
+        content = request_data.content if request_data.content is not None else existing["content"]
+        row = await conn.fetchrow(
+            """
+            UPDATE documents
+            SET title = $3,
+                content = $4,
+                char_count = $5,
+                raw_word_count = $6,
+                updated_at = NOW()
+            WHERE client_id = $1 AND id = $2
+            RETURNING id, client_document_id, title, content, char_count, raw_word_count, created_at, updated_at
+            """,
+            client_id,
+            existing["id"],
+            title,
+            content,
+            len(content),
+            count_words(content),
+        )
+        await invalidate_analysis(conn, client_id, "Документы изменены")
+        return {"status": "success", "data": document_to_dict(row)}
 
 
-# ==========================================
-# Маршруты
-# ==========================================
+@app.delete("/documents/{document_id}")
+async def delete_document(document_id: str, browser_id: str = Query(..., min_length=1)):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        result = await conn.execute(
+            """
+            DELETE FROM documents
+            WHERE client_id = $1 AND (client_document_id = $2 OR id::text = $2)
+            """,
+            client_id,
+            document_id,
+        )
+        deleted_count = int(result.split()[-1])
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail="DOCUMENT_NOT_FOUND")
+        await invalidate_analysis(conn, client_id, "Документы изменены")
+        return {
+            "status": "success",
+            "data": {"message": "Document deleted"},
+            "message": "Document deleted",
+        }
+
+
+@app.get("/settings")
+async def get_settings(browser_id: str = Query(..., min_length=1)):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        settings = settings_to_dict(await get_settings_record(conn, client_id))
+        return {"status": "success", "data": settings}
+
+
+@app.put("/settings")
+async def save_settings(request_data: SettingsRequest):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, request_data.browser_id)
+        settings = await save_settings_record(conn, client_id, request_data.settings)
+        return {"status": "success", "data": settings}
+
+
+@app.post("/analysis/seo")
+async def run_seo_analysis(request_data: SeoAnalysisRequest):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, request_data.browser_id)
+        documents = await fetch_selected_documents(conn, client_id, request_data.document_ids)
+        if not documents:
+            raise HTTPException(status_code=400, detail="DOCUMENTS_NOT_FOUND")
+        missing_ids = missing_document_ids(request_data.document_ids, documents)
+        if missing_ids:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "DOCUMENTS_NOT_FOUND", "missing_document_ids": missing_ids},
+            )
+
+        if request_data.params is None:
+            settings = AnalysisSettings(**settings_to_dict(await get_settings_record(conn, client_id)))
+        else:
+            settings = request_data.params
+
+        result = await build_seo_result(conn, documents, settings)
+        selected_ids = [document["id"] for document in documents]
+        params_snapshot = settings.model_dump()
+
+        await conn.execute(
+            """
+            INSERT INTO analysis_results (
+                client_id,
+                analysis_type,
+                selected_document_ids,
+                params_snapshot,
+                result,
+                is_actual,
+                invalidation_reason,
+                updated_at
+            )
+            VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, TRUE, NULL, NOW())
+            ON CONFLICT (client_id, analysis_type)
+            DO UPDATE SET
+                selected_document_ids = EXCLUDED.selected_document_ids,
+                params_snapshot = EXCLUDED.params_snapshot,
+                result = EXCLUDED.result,
+                is_actual = TRUE,
+                invalidation_reason = NULL,
+                updated_at = NOW()
+            """,
+            client_id,
+            SEO_ANALYSIS_TYPE,
+            json.dumps(selected_ids, ensure_ascii=False),
+            json.dumps(params_snapshot, ensure_ascii=False),
+            json.dumps(result, ensure_ascii=False),
+        )
+        return {
+            "status": "success",
+            "data": {
+                "analysis_type": SEO_ANALYSIS_TYPE,
+                "selected_document_ids": selected_ids,
+                "params_snapshot": params_snapshot,
+                "result": result,
+                "is_actual": True,
+                "invalidation_reason": None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        }
+
+
+@app.post("/analysis/compare")
+async def run_compare_analysis():
+    return {
+        "status": "not_implemented",
+        "message": "Сравнительный анализ пока в разработке",
+    }
+
+
+@app.post("/analysis/spelling")
+async def run_spelling_analysis():
+    return {
+        "status": "not_implemented",
+        "message": "Проверка орфографии пока в разработке",
+    }
+
+
+@app.get("/export/csv/seo/{table_type}")
+async def export_seo_csv(
+    table_type: Literal["words", "ngrams", "keywords", "spam", "water", "mixed"],
+    browser_id: str = Query(..., min_length=1),
+):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        result = await get_saved_seo_or_404(conn, client_id)
+        headers, rows, filename = seo_table_to_csv(table_type, result)
+        return csv_response(headers, rows, filename)
+
+
+@app.get("/export/zip/seo")
+async def export_seo_zip(browser_id: str = Query(..., min_length=1)):
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        result = await get_saved_seo_or_404(conn, client_id)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for table_type in ["words", "ngrams", "keywords", "spam", "water", "mixed"]:
+            headers, rows, filename = seo_table_to_csv(table_type, result)
+            archive.writestr(filename, csv_bytes(headers, rows))
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="seo_report.zip"'},
+    )
+
 
 @app.put("/corpus")
-async def update_corpus(request_data: PutCorpusRequest):
-    client_id = await get_client_id(request_data.browser_id)
-
-    if pool is None:
-        raise HTTPException(status_code=503, detail="Database not initialized")
-
-    try:
-        # Получаем соединение из пула один раз и открываем транзакцию
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                # Удаляем все старые документы
-                await conn.execute("DELETE FROM documents WHERE client_id = $1", client_id)
-
-                # Вставляем новые
-                for doc in request_data.documents:
-                    client_document_id = str(doc.id)
-                    title = f"document_{doc.id}"
-                    await conn.execute(
-                        """
-                        INSERT INTO documents (client_id, client_document_id, title, content)
-                        VALUES ($1, $2, $3, $4)
-                        """,
-                        client_id, client_document_id, title, doc.content
-                    )
-    except asyncpg.exceptions.PostgresError as e:
-        # Если при вставке сработает триггер или возникнет ошибка,
-        # транзакция будет автоматически отменена (ROLLBACK).
-        raise HTTPException(status_code=400, detail=f"Database error: {str(e)}")
-
-    return {"status": "success", "message": f"Saved {len(request_data.documents)} documents"}
+async def legacy_update_corpus(request_data: LegacyCorpusRequest):
+    documents = [
+        BulkDocumentItem(
+            id=document.id,
+            title=f"document_{document.id}",
+            content=document.content,
+        )
+        for document in request_data.documents
+    ]
+    return await replace_documents(
+        BulkDocumentsRequest(browser_id=request_data.browser_id, documents=documents)
+    )
 
 
 @app.post("/analysis/run")
-async def analyze_corpus(request_data: PostAnalysisRequest):
-    client_id = await get_client_id(request_data.browser_id)
-
-    # Извлекаем тексты документов из БД
-    documents_contents = await get_all_document_contents(client_id)
-
-    if not documents_contents:
-        raise HTTPException(status_code=400, detail="Corpus is empty")
-
-    params = request_data.params
-    min_len = params.get("min_word_length", 1)
-
-    global_word_counter = Counter()
-    total_words_count = 0
-
-    # Анализ без кэширования: извлекаем слова на лету
-    for content in documents_contents:
-        words = extract_words_from_text(content, min_len)
-        global_word_counter.update(words)
-        total_words_count += len(words)
-
-    top_n = params.get("top_n", 20)
-    if params.get("order_by") == "asc":
-        sorted_words = global_word_counter.most_common()[:-top_n - 1:-1]
-    else:
-        sorted_words = global_word_counter.most_common(top_n)
-
+async def legacy_analyze_corpus(request_data: LegacyAnalysisRequest):
+    response = await run_seo_analysis(
+        SeoAnalysisRequest(browser_id=request_data.browser_id, document_ids=[], params=None)
+    )
+    result = response["data"]["result"]
+    params = request_data.params or {}
+    top_n = int(params.get("top_n", 20))
+    min_word_length = int(params.get("min_word_length", 1))
+    order_by = params.get("order_by", "desc")
+    rows = [row for row in result["words"] if row["length"] >= min_word_length]
+    rows = sorted(rows, key=lambda item: item["count"], reverse=order_by != "asc")[:top_n]
     return {
         "status": "success",
         "data": {
             "summary": {
-                "documents_count": len(documents_contents),
-                "total_words": total_words_count,
-                "unique_words": len(global_word_counter)
+                "documents_count": result["summary"]["documents_count"],
+                "total_words": result["summary"]["total_words"],
+                "unique_words": result["summary"]["unique_words"],
             },
-            "table": [{"word": w, "count": c} for w, c in sorted_words]
-        }
+            "table": [{"word": row["word"], "count": row["count"]} for row in rows],
+        },
     }
 
 
 @app.get("/export/csv/{identifier}")
-async def download_csv(
-        identifier: str,
-        browser_id: str = Query(..., description="Browser ID пользователя"),
-        min_word_length: int = Query(1, ge=1, description="Минимальная длина слова"),
-        top_n: Optional[int] = Query(None, ge=1, description="Количество слов (если не указано — все)"),
-        order_by: Literal["asc", "desc"] = Query("desc", description="Порядок сортировки")
+async def legacy_download_csv(
+    identifier: str,
+    browser_id: str = Query(..., min_length=1),
 ):
-    """
-    Экспортирует CSV.
-    identifier может быть 'corpus' (для всех документов клиента)
-    или ID документа (client_document_id, например, '1').
-    """
-    client_id = await get_client_id(browser_id)
-    global_word_counter = Counter()
-
-    # 1. Получение контента и подсчет слов
-    if identifier == "corpus":
-        contents = await get_all_document_contents(client_id)
-        if not contents:
-            raise HTTPException(status_code=404, detail="Corpus is empty or not found")
-
-        for content in contents:
-            words = extract_words_from_text(content, min_word_length)
-            global_word_counter.update(words)
-    else:
-        content = await get_document_content_by_client_doc_id(client_id, identifier)
-        if not content:
-            raise HTTPException(status_code=404, detail="Analysis result not found")
-
-        words = extract_words_from_text(content, min_word_length)
-        global_word_counter.update(words)
-
-    # 2. Сортировка данных
-    if order_by == "desc":
-        sorted_items = sorted(global_word_counter.items(), key=lambda x: x[1], reverse=True)
-    else:
-        sorted_items = sorted(global_word_counter.items(), key=lambda x: x[1], reverse=False)
-
-    # 3. Применение ограничения top_n
-    if top_n is not None:
-        sorted_items = sorted_items[:top_n]
-
-    # 4. Формирование CSV
-    output = io.StringIO()
-    output.write('\ufeff')  # BOM для Excel
-    writer = csv.writer(output)
-    writer.writerow(['Слово', 'Частота'])
-    writer.writerows(sorted_items)
-    output.seek(0)
-
-    download_name = f"{identifier}_analysis.csv"
-
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={download_name}"}
-    )
+    async with require_pool().acquire() as conn:
+        client_id = await get_client_id(conn, browser_id)
+        result = await get_saved_seo_or_404(conn, client_id)
+        headers, rows, filename = seo_table_to_csv("words", result)
+        return csv_response(headers, rows, f"{identifier}_{filename}")
